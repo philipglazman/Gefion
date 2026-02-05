@@ -4,3 +4,7 @@ target/
 *.json
 !.env.example
 
+# Foundry
+cache/
+out/
+
