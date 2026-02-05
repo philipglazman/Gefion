@@ -74,7 +74,7 @@ class BlockchainService {
     const all = await this.getAllListings();
     return {
       selling: all.filter(l => l.seller.toLowerCase() === address.toLowerCase()),
-      buying: all.filter(l => l.buyer.toLowerCase() === address.toLowerCase())
+      buying: all.filter(l => l.buyer && l.buyer.toLowerCase() === address.toLowerCase())
     };
   }
 

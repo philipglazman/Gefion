@@ -30,30 +30,50 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 const GAME_METADATA: Record<number, { title: string; image: string; description: string }> = {
   730: {
     title: 'Counter-Strike 2',
-    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/730/header.jpg',
     description: 'The next evolution of Counter-Strike. Free to play.',
   },
   1245620: {
     title: 'Elden Ring',
-    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1245620/header.jpg',
     description: 'Rise, Tarnished, and be guided by grace to brandish the power of the Elden Ring.',
   },
   620: {
     title: 'Portal 2',
-    image: 'https://images.unsplash.com/photo-1533105079780-92b9be482077?w=800',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/620/header.jpg',
     description: 'The sequel to the acclaimed Portal. A portal-based puzzle game.',
   },
   570: {
     title: 'Dota 2',
-    image: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/570/header.jpg',
     description: 'Every day, millions of players battle in the ultimate competitive strategy game.',
+  },
+  1174180: {
+    title: 'Red Dead Redemption 2',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/1174180/header.jpg',
+    description: 'Winner of over 175 Game of the Year Awards, Red Dead Redemption 2 is an epic tale of life in America\'s unforgiving heartland.',
+  },
+  3240220: {
+    title: 'Grand Theft Auto V',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/3240220/header.jpg',
+    description: 'Grand Theft Auto V for PC offers players the option to explore the award-winning world of Los Santos and Blaine County.',
+  },
+  377160: {
+    title: 'Fallout 4',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/377160/header.jpg',
+    description: 'As the sole survivor of Vault 111, you enter a world destroyed by nuclear war. Only you can rebuild and determine the fate of the Wasteland.',
+  },
+  227300: {
+    title: 'Euro Truck Simulator 2',
+    image: 'https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/227300/header.jpg',
+    description: 'Travel across Europe as king of the road, hauling cargo from one end of the continent to the other.',
   },
 };
 
 function getGameMetadata(steamAppId: number) {
   return GAME_METADATA[steamAppId] || {
     title: `Steam Game #${steamAppId}`,
-    image: 'https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800',
+    image: `https://shared.cloudflare.steamstatic.com/store_item_assets/steam/apps/${steamAppId}/header.jpg`,
     description: 'A Steam game available for purchase.',
   };
 }

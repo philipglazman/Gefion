@@ -1,12 +1,29 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Listing } from '../types';
-import { ShoppingBag, AlertCircle, Clock, CheckCircle } from 'lucide-react';
+import { ShoppingBag, AlertCircle, Clock, CheckCircle, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 
 export function BuyerDashboard() {
   const { myListings, wallet, refreshMyListings } = useApp();
+  const [confirmingId, setConfirmingId] = useState<number | null>(null);
+
+  const handleConfirmReceipt = async (listingId: number) => {
+    setConfirmingId(listingId);
+    try {
+      toast.info('Proving game ownership...');
+      // Submit proof that buyer owns the game - releases funds to seller
+      await api.submitProofResult(listingId, true);
+      toast.success('Receipt confirmed! Funds released to seller.');
+      await refreshMyListings();
+    } catch (e) {
+      console.error('Confirm receipt failed:', e);
+      toast.error('Failed to confirm receipt');
+    } finally {
+      setConfirmingId(null);
+    }
+  };
 
   const handleRequestVerification = async (listingId: number) => {
     toast.info('Requesting ownership verification...');
@@ -58,6 +75,8 @@ export function BuyerDashboard() {
               key={listing.id}
               listing={listing}
               onRequestVerification={handleRequestVerification}
+              onConfirmReceipt={handleConfirmReceipt}
+              isConfirming={confirmingId === listing.id}
             />
           ))}
         </div>
@@ -69,9 +88,13 @@ export function BuyerDashboard() {
 function PurchaseCard({
   listing,
   onRequestVerification,
+  onConfirmReceipt,
+  isConfirming,
 }: {
   listing: Listing;
   onRequestVerification: (id: number) => void;
+  onConfirmReceipt: (id: number) => void;
+  isConfirming: boolean;
 }) {
   const [timeLeft, setTimeLeft] = useState('');
 
@@ -147,13 +170,28 @@ function PurchaseCard({
             </div>
           )}
 
-          {listing.status === 'Acknowledged' && canDispute && (
-            <button
-              onClick={() => onRequestVerification(listing.id)}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
-            >
-              Dispute (Prove Non-Ownership)
-            </button>
+          {listing.status === 'Acknowledged' && (
+            <>
+              <button
+                onClick={() => onConfirmReceipt(listing.id)}
+                disabled={isConfirming}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap disabled:bg-green-400 flex items-center gap-2"
+              >
+                <Shield className="w-4 h-4" />
+                {isConfirming ? 'Confirming...' : 'Confirm Receipt'}
+              </button>
+              {canDispute && (
+                <button
+                  onClick={() => onRequestVerification(listing.id)}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
+                >
+                  Dispute (Prove Non-Ownership)
+                </button>
+              )}
+              <div className="text-xs text-slate-500 text-center">
+                Confirm when you receive the game
+              </div>
+            </>
           )}
 
           {listing.status === 'Completed' && (
