@@ -7,7 +7,7 @@ import { toast } from 'sonner';
 export function GameDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { games, wallet, addPurchase } = useApp();
+  const { games, wallet, purchase, connectWallet } = useApp();
   const [steamUsername, setSteamUsername] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -23,8 +23,12 @@ export function GameDetails() {
 
   const handlePurchase = async () => {
     if (!wallet.connected) {
-      toast.error('Please connect your wallet first');
-      return;
+      try {
+        await connectWallet();
+      } catch {
+        toast.error('Failed to connect wallet');
+        return;
+      }
     }
 
     if (!steamUsername.trim()) {
@@ -37,28 +41,23 @@ export function GameDetails() {
       return;
     }
 
+    if (game.listingId === undefined) {
+      toast.error('Invalid listing');
+      return;
+    }
+
     setIsProcessing(true);
 
-    // Simulate blockchain transaction
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    const purchase = {
-      id: Math.random().toString(36).substring(7),
-      gameId: game.id,
-      gameTitle: game.title,
-      buyerAddress: wallet.address,
-      buyerSteamUsername: steamUsername,
-      sellerAddress: game.sellerAddress,
-      price: game.price,
-      status: 'pending' as const,
-      createdAt: new Date(),
-      disputeDeadline: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
-    };
-
-    addPurchase(purchase);
-    toast.success('Purchase initiated! Funds deposited to escrow.');
-    setIsProcessing(false);
-    navigate('/buyer');
+    try {
+      await purchase(game.listingId, steamUsername, game.price);
+      toast.success('Purchase initiated! Funds deposited to escrow.');
+      navigate('/buyer');
+    } catch (e) {
+      console.error('Purchase failed:', e);
+      toast.error('Purchase failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -86,6 +85,11 @@ export function GameDetails() {
               <div className="text-xs text-slate-500">
                 Seller Address: {game.sellerAddress.slice(0, 10)}...{game.sellerAddress.slice(-8)}
               </div>
+              {game.steamAppId && (
+                <div className="text-xs text-slate-500">
+                  Steam App ID: {game.steamAppId}
+                </div>
+              )}
             </div>
           </div>
 
@@ -115,15 +119,15 @@ export function GameDetails() {
 
               <button
                 onClick={handlePurchase}
-                disabled={isProcessing || !wallet.connected}
+                disabled={isProcessing}
                 className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed font-medium"
               >
-                {isProcessing ? 'Processing...' : 'Buy Now & Deposit to Escrow'}
+                {isProcessing ? 'Processing...' : wallet.connected ? 'Buy Now & Deposit to Escrow' : 'Connect Wallet & Buy'}
               </button>
 
-              {!wallet.connected && (
-                <p className="text-sm text-center text-amber-600">
-                  Please connect your wallet to purchase
+              {wallet.connected && (
+                <p className="text-sm text-center text-slate-500">
+                  Balance: {wallet.balance.toFixed(2)} USDC
                 </p>
               )}
             </div>

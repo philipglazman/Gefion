@@ -1,35 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { Listing } from '../types';
 import { ShoppingBag, AlertCircle, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../services/api';
 
 export function BuyerDashboard() {
-  const { purchases, wallet, updatePurchase } = useApp();
+  const { myListings, wallet, refreshMyListings } = useApp();
 
-  const buyerPurchases = purchases.filter(
-    (p) => p.buyerAddress.toLowerCase() === wallet.address.toLowerCase()
-  );
-
-  const handleDispute = async (purchaseId: string) => {
-    // Mock API call to prove non-ownership
-    toast.info('Calling proof of non-ownership API...');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    updatePurchase(purchaseId, {
-      status: 'refunded',
-    });
-    toast.success('Ownership not proven. Funds refunded from escrow.');
-  };
-
-  const handleProveOwnership = async (purchaseId: string) => {
-    // Mock API call to prove ownership
-    toast.info('Calling proof of ownership API...');
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    updatePurchase(purchaseId, {
-      status: 'completed',
-    });
-    toast.success('Ownership verified! Transaction completed.');
+  const handleRequestVerification = async (listingId: number) => {
+    toast.info('Requesting ownership verification...');
+    try {
+      await api.requestVerification(listingId);
+      toast.success('Verification requested!');
+      await refreshMyListings();
+    } catch (e) {
+      console.error('Verification request failed:', e);
+      toast.error('Verification not yet implemented on backend');
+    }
   };
 
   if (!wallet.connected) {
@@ -48,6 +36,8 @@ export function BuyerDashboard() {
     );
   }
 
+  const buyerListings = myListings.buying;
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       <div className="mb-8">
@@ -55,7 +45,7 @@ export function BuyerDashboard() {
         <p className="text-slate-600">Track your game purchases and manage disputes</p>
       </div>
 
-      {buyerPurchases.length === 0 ? (
+      {buyerListings.length === 0 ? (
         <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
           <ShoppingBag className="w-16 h-16 text-slate-300 mx-auto mb-4" />
           <h3 className="text-lg font-medium text-slate-900 mb-2">No purchases yet</h3>
@@ -63,12 +53,11 @@ export function BuyerDashboard() {
         </div>
       ) : (
         <div className="space-y-4">
-          {buyerPurchases.map((purchase) => (
+          {buyerListings.map((listing) => (
             <PurchaseCard
-              key={purchase.id}
-              purchase={purchase}
-              onDispute={handleDispute}
-              onProveOwnership={handleProveOwnership}
+              key={listing.id}
+              listing={listing}
+              onRequestVerification={handleRequestVerification}
             />
           ))}
         </div>
@@ -78,20 +67,20 @@ export function BuyerDashboard() {
 }
 
 function PurchaseCard({
-  purchase,
-  onDispute,
-  onProveOwnership,
+  listing,
+  onRequestVerification,
 }: {
-  purchase: any;
-  onDispute: (id: string) => void;
-  onProveOwnership: (id: string) => void;
+  listing: Listing;
+  onRequestVerification: (id: number) => void;
 }) {
   const [timeLeft, setTimeLeft] = useState('');
 
   useEffect(() => {
+    if (!listing.disputeDeadline) return;
+
     const interval = setInterval(() => {
-      const now = new Date().getTime();
-      const deadline = new Date(purchase.disputeDeadline).getTime();
+      const now = Date.now();
+      const deadline = listing.disputeDeadline! * 1000; // Convert seconds to ms
       const difference = deadline - now;
 
       if (difference > 0) {
@@ -105,9 +94,9 @@ function PurchaseCard({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [purchase.disputeDeadline]);
+  }, [listing.disputeDeadline]);
 
-  const canDispute = purchase.status !== 'completed' && purchase.status !== 'refunded' && timeLeft !== 'Expired';
+  const canDispute = listing.status === 'Acknowledged' && timeLeft !== 'Expired';
 
   return (
     <div className="bg-white rounded-lg border border-slate-200 p-6">
@@ -115,33 +104,31 @@ function PurchaseCard({
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-3">
             <h3 className="text-xl font-semibold text-slate-900">
-              {purchase.gameTitle}
+              {listing.title || `Game #${listing.steamAppId}`}
             </h3>
-            <StatusBadge status={purchase.status} />
+            <StatusBadge status={listing.status} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4 text-sm mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
             <div>
               <div className="text-slate-500 mb-1">Seller</div>
               <div className="font-medium text-slate-900">
-                {purchase.sellerAddress.slice(0, 10)}...{purchase.sellerAddress.slice(-8)}
+                {listing.seller.slice(0, 10)}...{listing.seller.slice(-8)}
               </div>
             </div>
             <div>
               <div className="text-slate-500 mb-1">Steam Username</div>
               <div className="font-medium text-slate-900">
-                {purchase.buyerSteamUsername}
+                {listing.buyerSteamUsername}
               </div>
             </div>
             <div>
               <div className="text-slate-500 mb-1">Amount</div>
-              <div className="font-medium text-blue-600">{purchase.price} USDC</div>
+              <div className="font-medium text-blue-600">{listing.price} USDC</div>
             </div>
             <div>
-              <div className="text-slate-500 mb-1">Purchase Time</div>
-              <div className="font-medium text-slate-900">
-                {purchase.createdAt.toLocaleString()}
-              </div>
+              <div className="text-slate-500 mb-1">Steam App ID</div>
+              <div className="font-medium text-slate-900">{listing.steamAppId}</div>
             </div>
           </div>
 
@@ -154,48 +141,32 @@ function PurchaseCard({
         </div>
 
         <div className="ml-6 flex flex-col gap-2">
-          {purchase.status === 'pending' && (
+          {listing.status === 'Purchased' && (
             <div className="text-sm text-slate-600 text-right px-4 py-2 bg-yellow-50 rounded-lg">
               Waiting for seller to acknowledge
             </div>
           )}
 
-          {purchase.status === 'acknowledged' && canDispute && (
-            <>
-              <button
-                onClick={() => onProveOwnership(purchase.id)}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-              >
-                Prove Ownership
-              </button>
-              <button
-                onClick={() => onDispute(purchase.id)}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
-              >
-                Dispute
-              </button>
-            </>
-          )}
-
-          {purchase.status === 'disputed' && (
+          {listing.status === 'Acknowledged' && canDispute && (
             <button
-              onClick={() => onProveOwnership(purchase.id)}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+              onClick={() => onRequestVerification(listing.id)}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
             >
-              Prove Ownership
+              Dispute (Prove Non-Ownership)
             </button>
           )}
 
-          {purchase.status === 'completed' && (
+          {listing.status === 'Completed' && (
             <div className="flex items-center gap-2 text-green-600 px-4 py-2 bg-green-50 rounded-lg">
               <CheckCircle className="w-5 h-5" />
               <span className="font-medium">Completed</span>
             </div>
           )}
 
-          {purchase.status === 'refunded' && (
-            <div className="text-sm text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
-              Refunded
+          {listing.status === 'Refunded' && (
+            <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
+              <CheckCircle className="w-5 h-5" />
+              <span className="font-medium">Refunded</span>
             </div>
           )}
         </div>
@@ -205,25 +176,19 @@ function PurchaseCard({
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const styles = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    acknowledged: 'bg-blue-100 text-blue-800',
-    completed: 'bg-green-100 text-green-800',
-    disputed: 'bg-red-100 text-red-800',
-    refunded: 'bg-slate-100 text-slate-800',
-  };
-
-  const labels = {
-    pending: 'Pending',
-    acknowledged: 'Acknowledged',
-    completed: 'Completed',
-    disputed: 'Disputed',
-    refunded: 'Refunded',
+  const styles: Record<string, string> = {
+    Open: 'bg-green-100 text-green-800',
+    Purchased: 'bg-yellow-100 text-yellow-800',
+    Acknowledged: 'bg-blue-100 text-blue-800',
+    Completed: 'bg-green-100 text-green-800',
+    Disputed: 'bg-red-100 text-red-800',
+    Refunded: 'bg-slate-100 text-slate-800',
+    Cancelled: 'bg-slate-100 text-slate-800',
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status as keyof typeof styles]}`}>
-      {labels[status as keyof typeof labels]}
+    <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-slate-100 text-slate-800'}`}>
+      {status}
     </span>
   );
 }

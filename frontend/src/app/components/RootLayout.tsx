@@ -1,16 +1,32 @@
+import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router';
 import { Wallet, ShoppingBag, Store, Gamepad2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { toast } from 'sonner';
 
 export function RootLayout() {
-  const { wallet, connectWallet, disconnectWallet } = useApp();
+  const { wallet, connectWallet, disconnectWallet, isLoading } = useApp();
   const location = useLocation();
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const isActive = (path: string) => {
     if (path === '/') {
       return location.pathname === '/';
     }
     return location.pathname.startsWith(path);
+  };
+
+  const handleConnect = async () => {
+    setIsConnecting(true);
+    try {
+      await connectWallet();
+      toast.success('Wallet connected!');
+    } catch (e) {
+      console.error('Failed to connect:', e);
+      toast.error('Failed to connect wallet. Make sure MetaMask is installed.');
+    } finally {
+      setIsConnecting(false);
+    }
   };
 
   return (
@@ -21,7 +37,7 @@ export function RootLayout() {
             <div className="flex items-center gap-8">
               <Link to="/" className="flex items-center gap-2 text-xl font-semibold text-slate-900">
                 <Gamepad2 className="w-6 h-6 text-blue-600" />
-                SteamMarket
+                Forage
               </Link>
               <div className="flex gap-1">
                 <Link
@@ -76,11 +92,12 @@ export function RootLayout() {
                 </div>
               ) : (
                 <button
-                  onClick={connectWallet}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                  onClick={handleConnect}
+                  disabled={isConnecting || isLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:bg-blue-400"
                 >
                   <Wallet className="w-4 h-4" />
-                  Connect Wallet
+                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
                 </button>
               )}
             </div>
