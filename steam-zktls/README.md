@@ -10,21 +10,21 @@ git clone https://github.com/tlsnotary/tlsn.git
 cd tlsn/crates/notary/server && cargo run --release
 # Wait for "Listening on 0.0.0.0:7047"
 
-# Terminal 2: Generate and verify proof
+# Terminal 2: Generate proof and export for on-chain verification
 cd steam-zktls
 
 # Generate proof for a game you own
 ./target/release/prover -v ohnoitspanda -a 730
 ./target/release/present -a 730
-./target/release/verifier -a 730
-# Output: yes
+./target/release/export     # outputs steam_ownership.proof.json
 
 # Generate proof for a game you don't own
 ./target/release/prover -v ohnoitspanda -a 1245620
 ./target/release/present -a 1245620
-./target/release/verifier -a 1245620
-# Output: no
+./target/release/export -i steam_ownership.presentation.tlsn -o steam_notown.proof.json
 ```
+
+The production pipeline is **prover -> present -> export**. The exported JSON contains all fields needed for on-chain verification via `SteamGameVerifier.verifyAndResolve()`.
 
 ## What It Proves
 
@@ -78,9 +78,27 @@ Creates selective disclosure (reveals only `game_count`).
 ./target/release/present -a <APP_ID>
 ```
 
+### export
+
+Extracts the notary signature, timestamp, ownership result, and transcript hash from a presentation file into a JSON format ready for Solidity's `ecrecover`. This is the final step before submitting a proof on-chain.
+
+```bash
+./target/release/export                          # default: steam_ownership.presentation.tlsn -> steam_ownership.proof.json
+./target/release/export -i <INPUT> -o <OUTPUT>   # custom paths
+./target/release/export -v                       # verbose (shows key/signature details)
+```
+
+Output JSON fields map directly to `SteamGameVerifier.verifyAndResolve()` parameters:
+- `messageHash` - SHA256 hash of the BCS-serialized attestation header
+- `signatureV`, `signatureR`, `signatureS` - notary ECDSA signature
+- `serverName` - must be `api.steampowered.com`
+- `timestamp` - unix timestamp of the TLS connection
+- `ownsGame` - `true` if `game_count >= 1`
+- `transcriptHash` - SHA256 hash of the revealed transcript
+
 ### verifier
 
-Outputs `yes` or `no`. Exit code: 0 = owns, 1 = doesn't own.
+Local off-chain verification for conformance testing. Outputs `yes` or `no`. Use this to sanity-check proofs before submitting on-chain. In production, verification happens on-chain via `SteamOwnershipVerifier` + `SteamGameVerifier`.
 
 ```bash
 ./target/release/verifier -a <APP_ID>
@@ -109,11 +127,14 @@ Outputs `yes` or `no`. Exit code: 0 = owns, 1 = doesn't own.
      └──────────────────────────────────────────┘
 ```
 
-1. Prover queries Steam: "Does user X own game Y?"
+1. **prover** queries Steam: "Does user X own game Y?"
 2. Steam returns `game_count: 1` (yes) or `game_count: 0` (no)
 3. Notary signs the TLS session without seeing plaintext
-4. Presentation reveals only `game_count` value
-5. Verifier outputs `yes` or `no`
+4. **present** creates selective disclosure revealing only `game_count`
+5. **export** extracts signature + metadata into Solidity-compatible JSON
+6. JSON is submitted to `SteamGameVerifier.verifyAndResolve()` for on-chain verification
+
+The **verifier** CLI is for local conformance testing only. Production verification is on-chain via `SteamOwnershipVerifier` (signature check) and `SteamGameVerifier` (timestamp binding + escrow resolution).
 
 ## License
 
