@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import { config } from './config/index.js';
@@ -26,7 +27,7 @@ app.use('/api/verifier', verifierRouter);
 app.use('/api/config', configRouter);
 app.use('/api/steam', steamRouter);
 
-app.listen(config.port, () => {
+app.listen(config.port, '127.0.0.1', () => {
   console.log(`Backend running on http://localhost:${config.port}`);
 
   if (!blockchain.isConfigured()) {
