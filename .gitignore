@@ -1,2 +1,8 @@
 # Generated notary keys — unique per deployment
 keys/notary/
+
+# TLSNotary server (cloned locally, not vendored)
+tlsn/
+
+# Forge broadcast/deploy logs
+contract/broadcast/
