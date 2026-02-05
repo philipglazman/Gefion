@@ -119,6 +119,24 @@ router.post('/verify', async (req, res) => {
     // Submit to verifier contract
     const txHash = await blockchain.submitProofToVerifier(tradeId, proof);
 
+    // Get transaction receipt to record the event
+    const receipt = await blockchain.provider.getTransactionReceipt(txHash);
+    const block = await blockchain.provider.getBlock(receipt.blockNumber);
+
+    // Record the event (FundsReleased if owns game, FundsRefunded if not)
+    const eventName = proofData.ownsGame ? 'FundsReleased' : 'FundsRefunded';
+    const recipient = proofData.ownsGame ? trade.seller : trade.buyer;
+
+    await blockchain.saveTradeEvent(
+      tradeId,
+      eventName,
+      txHash,
+      receipt.blockNumber,
+      block.timestamp,
+      receipt.from,
+      { tradeId, recipient }
+    );
+
     // Clean up proof file
     await unlink(proofFile).catch(() => {});
 

@@ -168,7 +168,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const purchase = async (steamAppId: number, seller: string, steamUsername: string, price: number, listingId?: number) => {
-    const txHash = await blockchain.createTrade(steamAppId, seller, steamUsername, price);
+    const { hash: txHash } = await blockchain.createTrade(steamAppId, seller, steamUsername, price);
     // Mark off-chain listing as sold if listingId provided
     if (listingId) {
       try {

@@ -25,7 +25,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing required fields: seller, steamAppId, price' });
     }
 
-    const listing = listingsService.create(seller, steamAppId, parseFloat(price), description || '');
+    const listing = listingsService.create(seller, String(parseInt(steamAppId)), parseFloat(price), description || '');
     res.json(listing);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -88,6 +88,42 @@ router.get('/trades/:id/history', async (req, res) => {
   try {
     const history = await blockchain.getTradeHistory(req.params.id);
     res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/listings/trades/:id/history - Record a trade event (called by frontend after tx)
+router.post('/trades/:id/history', async (req, res) => {
+  try {
+    const tradeId = parseInt(req.params.id);
+    const { eventName, txHash, blockNumber, timestamp, from, args } = req.body;
+
+    if (!eventName || !txHash || !blockNumber || !timestamp || !from) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const event = await blockchain.saveTradeEvent(
+      tradeId,
+      eventName,
+      txHash,
+      blockNumber,
+      timestamp,
+      from,
+      args || {}
+    );
+    res.json(event);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/listings/trades/:id/sync - Sync trade history from blockchain
+router.post('/trades/:id/sync', async (req, res) => {
+  try {
+    const tradeId = parseInt(req.params.id);
+    const history = await blockchain.fetchTradeHistoryFromChain(tradeId);
+    res.json({ synced: history.length, events: history });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

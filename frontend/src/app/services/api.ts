@@ -55,6 +55,34 @@ const api = {
     return res.json();
   },
 
+  // Record a trade event (called after transaction is confirmed)
+  async recordTradeEvent(
+    tradeId: number,
+    eventName: string,
+    txHash: string,
+    blockNumber: number,
+    timestamp: number,
+    from: string,
+    args: Record<string, unknown> = {}
+  ): Promise<TransactionEvent> {
+    const res = await fetch(`${config.apiUrl}/api/listings/trades/${tradeId}/history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ eventName, txHash, blockNumber, timestamp, from, args }),
+    });
+    if (!res.ok) throw new Error('Failed to record trade event');
+    return res.json();
+  },
+
+  // Sync trade history from blockchain
+  async syncTradeHistory(tradeId: number): Promise<{ synced: number }> {
+    const res = await fetch(`${config.apiUrl}/api/listings/trades/${tradeId}/sync`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to sync trade history');
+    return res.json();
+  },
+
   // Create an off-chain listing (seller)
   async createListing(seller: string, steamAppId: number, price: number): Promise<{ id: number }> {
     const res = await fetch(`${config.apiUrl}/api/listings`, {

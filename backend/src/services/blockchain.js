@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { config } from '../config/index.js';
+import { databaseService } from './database.js';
 
 // ABIs for the new buyer-initiated escrow contract
 const ESCROW_ABI = [
@@ -140,7 +141,55 @@ class BlockchainService {
     };
   }
 
+  // Get trade history from database
   async getTradeHistory(tradeId) {
+    return databaseService.getTradeHistory(tradeId);
+  }
+
+  // Save a trade event to the database (called after transactions)
+  async saveTradeEvent(tradeId, eventName, txHash, blockNumber, timestamp, fromAddress, args) {
+    return databaseService.saveTradeEvent(
+      tradeId,
+      eventName,
+      txHash,
+      blockNumber,
+      timestamp,
+      fromAddress,
+      args
+    );
+  }
+
+  // Helper to extract and save event from a transaction receipt
+  async saveEventFromReceipt(receipt, eventName, tradeId) {
+    const block = await this.provider.getBlock(receipt.blockNumber);
+    const formattedArgs = {};
+
+    // Parse the event from the receipt logs
+    for (const log of receipt.logs) {
+      try {
+        const parsed = this.escrow.interface.parseLog(log);
+        if (parsed && parsed.name === eventName) {
+          Object.assign(formattedArgs, this.formatEventArgs(eventName, parsed.args));
+          break;
+        }
+      } catch (e) {
+        // Not our event, skip
+      }
+    }
+
+    return this.saveTradeEvent(
+      tradeId,
+      eventName,
+      receipt.hash,
+      receipt.blockNumber,
+      block.timestamp,
+      receipt.from,
+      formattedArgs
+    );
+  }
+
+  // Fetch trade history from blockchain (for syncing/backfilling)
+  async fetchTradeHistoryFromChain(tradeId) {
     const events = [];
 
     // Query all event types for this trade
@@ -153,14 +202,26 @@ class BlockchainService {
           const block = await log.getBlock();
           const tx = await log.getTransaction();
 
-          events.push({
+          const event = {
             event: eventName,
             txHash: log.transactionHash,
             blockNumber: log.blockNumber,
             timestamp: block.timestamp,
             from: tx.from,
             args: this.formatEventArgs(eventName, log.args)
-          });
+          };
+          events.push(event);
+
+          // Also save to database
+          this.saveTradeEvent(
+            tradeId,
+            eventName,
+            log.transactionHash,
+            log.blockNumber,
+            block.timestamp,
+            tx.from,
+            event.args
+          );
         }
       } catch (e) {
         console.error(`Error fetching ${eventName} events:`, e);

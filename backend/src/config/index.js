@@ -9,7 +9,7 @@ const CHAIN_CONFIGS = {
   31337: {
     name: 'Anvil Local',
     rpcUrl: 'http://localhost:8545',
-    explorerUrl: '',
+    explorerUrl: 'https://testnet.monadvision.com',
   },
   10143: {
     name: 'Monad Testnet',
