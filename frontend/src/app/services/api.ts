@@ -1,5 +1,5 @@
 import { config } from '../config';
-import { Listing } from '../types';
+import { Listing, TransactionEvent, SteamGame } from '../types';
 
 const api = {
   async getListings(): Promise<Listing[]> {
@@ -50,6 +50,31 @@ const api = {
       const data = await res.json();
       throw new Error(data.error || 'Failed to submit proof');
     }
+    return res.json();
+  },
+
+  // Get transaction history for a listing
+  async getListingHistory(listingId: number): Promise<TransactionEvent[]> {
+    const res = await fetch(`${config.apiUrl}/api/listings/${listingId}/history`);
+    if (!res.ok) throw new Error('Failed to fetch history');
+    return res.json();
+  },
+
+  // Get Steam game details
+  async getSteamGame(appId: number): Promise<SteamGame> {
+    const res = await fetch(`${config.apiUrl}/api/steam/game/${appId}`);
+    if (!res.ok) throw new Error('Failed to fetch game details');
+    return res.json();
+  },
+
+  // Get multiple Steam game details
+  async getSteamGames(appIds: number[]): Promise<Record<number, SteamGame>> {
+    const res = await fetch(`${config.apiUrl}/api/steam/games`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appIds }),
+    });
+    if (!res.ok) throw new Error('Failed to fetch game details');
     return res.json();
   },
 };

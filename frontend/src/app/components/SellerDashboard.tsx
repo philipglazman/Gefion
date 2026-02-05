@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Package, CheckCircle, AlertCircle, Plus, Clock, Shield } from 'lucide-react';
+import { Package, CheckCircle, AlertCircle, Plus, Clock, Shield, History } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
+import { TransactionHistory } from './TransactionHistory';
+import { Listing } from '../types';
 
 export function SellerDashboard() {
   const { myListings, wallet, acknowledge, claimAfterWindow, createListing, cancelListing, refreshMyListings } = useApp();
@@ -11,6 +13,7 @@ export function SellerDashboard() {
   const [newSteamAppId, setNewSteamAppId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [provingId, setProvingId] = useState<number | null>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const handleAcknowledge = async (listingId: number) => {
     try {
@@ -109,6 +112,14 @@ export function SellerDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      {selectedListing && (
+        <TransactionHistory
+          listingId={selectedListing.id}
+          title={selectedListing.title || `Game #${selectedListing.steamAppId}`}
+          onClose={() => setSelectedListing(null)}
+        />
+      )}
+
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Seller Dashboard</h1>
@@ -234,6 +245,13 @@ export function SellerDashboard() {
                   </div>
                 </div>
                 <div className="ml-6 flex flex-col gap-2">
+                  <button
+                    onClick={() => setSelectedListing(listing)}
+                    className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
+                  >
+                    <History className="w-4 h-4" />
+                    View History
+                  </button>
                   {listing.status === 'Open' && (
                     <button
                       onClick={() => handleCancel(listing.id)}

@@ -19,6 +19,15 @@ const ESCROW_ABI = [
   'event FundsRefunded(uint256 indexed listingId, address indexed recipient)'
 ];
 
+const EVENT_NAMES = [
+  'ListingCreated',
+  'ListingCancelled',
+  'GamePurchased',
+  'SaleAcknowledged',
+  'FundsReleased',
+  'FundsRefunded'
+];
+
 const USDC_ABI = [
   'function balanceOf(address account) external view returns (uint256)',
   'function approve(address spender, uint256 amount) external returns (bool)',
@@ -103,6 +112,73 @@ class BlockchainService {
       acknowledgedAt: listing.acknowledgedAt > 0 ? Number(listing.acknowledgedAt) : null,
       disputeDeadline: listing.acknowledgedAt > 0 ? Number(listing.acknowledgedAt) + 3600 : null
     };
+  }
+
+  async getListingHistory(listingId) {
+    const events = [];
+
+    // Query all event types for this listing
+    for (const eventName of EVENT_NAMES) {
+      try {
+        const filter = this.escrow.filters[eventName](listingId);
+        const logs = await this.escrow.queryFilter(filter, 0, 'latest');
+
+        for (const log of logs) {
+          const block = await log.getBlock();
+          const tx = await log.getTransaction();
+
+          events.push({
+            event: eventName,
+            txHash: log.transactionHash,
+            blockNumber: log.blockNumber,
+            timestamp: block.timestamp,
+            from: tx.from,
+            args: this.formatEventArgs(eventName, log.args)
+          });
+        }
+      } catch (e) {
+        console.error(`Error fetching ${eventName} events:`, e);
+      }
+    }
+
+    // Sort by block number (chronological order)
+    events.sort((a, b) => a.blockNumber - b.blockNumber);
+
+    return events;
+  }
+
+  formatEventArgs(eventName, args) {
+    switch (eventName) {
+      case 'ListingCreated':
+        return {
+          listingId: Number(args.listingId),
+          seller: args.seller,
+          price: ethers.formatUnits(args.price, 6),
+          steamAppId: Number(args.steamAppId)
+        };
+      case 'ListingCancelled':
+        return { listingId: Number(args.listingId) };
+      case 'GamePurchased':
+        return {
+          listingId: Number(args.listingId),
+          buyer: args.buyer,
+          steamUsername: args.steamUsername
+        };
+      case 'SaleAcknowledged':
+        return { listingId: Number(args.listingId) };
+      case 'FundsReleased':
+        return {
+          listingId: Number(args.listingId),
+          recipient: args.recipient
+        };
+      case 'FundsRefunded':
+        return {
+          listingId: Number(args.listingId),
+          recipient: args.recipient
+        };
+      default:
+        return {};
+    }
   }
 }
 

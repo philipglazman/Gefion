@@ -23,6 +23,16 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// GET /api/listings/:id/history - Get listing transaction history
+router.get('/:id/history', async (req, res) => {
+  try {
+    const history = await blockchain.getListingHistory(req.params.id);
+    res.json(history);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // GET /api/listings/address/:address - Get listings by address
 router.get('/address/:address', async (req, res) => {
   try {

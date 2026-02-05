@@ -48,6 +48,22 @@ export interface WalletState {
   balance: number; // USDC balance
 }
 
+export interface TransactionEvent {
+  event: 'ListingCreated' | 'ListingCancelled' | 'GamePurchased' | 'SaleAcknowledged' | 'FundsReleased' | 'FundsRefunded';
+  txHash: string;
+  blockNumber: number;
+  timestamp: number;
+  from: string;
+  args: Record<string, unknown>;
+}
+
+export interface SteamGame {
+  name: string;
+  headerImage: string;
+  shortDescription: string;
+  appId: number;
+}
+
 // Map contract status to frontend status
 export function mapListingStatus(status: Listing['status']): Purchase['status'] {
   const map: Record<Listing['status'], Purchase['status']> = {

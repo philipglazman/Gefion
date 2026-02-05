@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Listing } from '../types';
-import { ShoppingBag, AlertCircle, Clock, CheckCircle, Shield } from 'lucide-react';
+import { ShoppingBag, AlertCircle, Clock, CheckCircle, Shield, History } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
+import { TransactionHistory } from './TransactionHistory';
 
 export function BuyerDashboard() {
   const { myListings, wallet, refreshMyListings } = useApp();
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
+  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
   const handleConfirmReceipt = async (listingId: number) => {
     setConfirmingId(listingId);
@@ -57,6 +59,14 @@ export function BuyerDashboard() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      {selectedListing && (
+        <TransactionHistory
+          listingId={selectedListing.id}
+          title={selectedListing.title || `Game #${selectedListing.steamAppId}`}
+          onClose={() => setSelectedListing(null)}
+        />
+      )}
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-slate-900 mb-2">My Purchases</h1>
         <p className="text-slate-600">Track your game purchases and manage disputes</p>
@@ -76,6 +86,7 @@ export function BuyerDashboard() {
               listing={listing}
               onRequestVerification={handleRequestVerification}
               onConfirmReceipt={handleConfirmReceipt}
+              onViewHistory={() => setSelectedListing(listing)}
               isConfirming={confirmingId === listing.id}
             />
           ))}
@@ -89,11 +100,13 @@ function PurchaseCard({
   listing,
   onRequestVerification,
   onConfirmReceipt,
+  onViewHistory,
   isConfirming,
 }: {
   listing: Listing;
   onRequestVerification: (id: number) => void;
   onConfirmReceipt: (id: number) => void;
+  onViewHistory: () => void;
   isConfirming: boolean;
 }) {
   const [timeLeft, setTimeLeft] = useState('');
@@ -164,6 +177,13 @@ function PurchaseCard({
         </div>
 
         <div className="ml-6 flex flex-col gap-2">
+          <button
+            onClick={onViewHistory}
+            className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
+          >
+            <History className="w-4 h-4" />
+            View History
+          </button>
           {listing.status === 'Purchased' && (
             <div className="text-sm text-slate-600 text-right px-4 py-2 bg-yellow-50 rounded-lg">
               Waiting for seller to acknowledge

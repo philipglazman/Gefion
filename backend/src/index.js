@@ -5,6 +5,7 @@ import { blockchain } from './services/blockchain.js';
 import listingsRouter from './routes/listings.js';
 import verifierRouter from './routes/verifier.js';
 import configRouter from './routes/config.js';
+import steamRouter from './routes/steam.js';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.get('/health', (req, res) => {
 app.use('/api/listings', listingsRouter);
 app.use('/api/verifier', verifierRouter);
 app.use('/api/config', configRouter);
+app.use('/api/steam', steamRouter);
 
 app.listen(config.port, () => {
   console.log(`Backend running on http://localhost:${config.port}`);
