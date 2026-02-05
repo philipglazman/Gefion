@@ -16,8 +16,8 @@ contract DeployScript is Script {
         console.log("MockUSDC deployed at:", address(usdc));
 
         // Deploy SteamOwnershipVerifier with the TLSNotary notary address
-        // This is the real notary address derived from the TLSNotary public key
-        address notaryAddress = 0x8d2742456c331C5b61997229AAB28F57f7A87227;
+        // Read from NOTARY_ADDRESS env var; fall back to test key for local dev
+        address notaryAddress = vm.envOr("NOTARY_ADDRESS", address(0x8d2742456c331C5b61997229AAB28F57f7A87227));
         SteamOwnershipVerifier ownershipVerifier = new SteamOwnershipVerifier(notaryAddress);
         console.log("SteamOwnershipVerifier deployed at:", address(ownershipVerifier));
 

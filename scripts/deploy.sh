@@ -2,7 +2,17 @@
 
 set -e
 
-cd "$(dirname "$0")/../contract"
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# If a generated notary address exists, export it for forge
+NOTARY_ADDR_FILE="$REPO_ROOT/keys/notary/notary.address"
+if [ -z "${NOTARY_ADDRESS:-}" ] && [ -f "$NOTARY_ADDR_FILE" ]; then
+  export NOTARY_ADDRESS
+  NOTARY_ADDRESS="$(cat "$NOTARY_ADDR_FILE")"
+  echo "Using notary address from $NOTARY_ADDR_FILE: $NOTARY_ADDRESS"
+fi
+
+cd "$REPO_ROOT/contract"
 
 # Install dependencies if needed
 if [ ! -d "lib/openzeppelin-contracts" ]; then

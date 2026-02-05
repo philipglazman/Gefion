@@ -44,7 +44,14 @@ if [ ! -f "target/release/notary-server" ]; then
   cargo build --release
 fi
 echo "Starting TLSNotary notary server..."
-cargo run --release > /tmp/notary.log 2>&1 &
+NOTARY_CONFIG="$PROJECT_DIR/keys/notary/notary-config.yaml"
+if [ -f "$NOTARY_CONFIG" ]; then
+  echo "Using notary config: $NOTARY_CONFIG"
+  cargo run --release -- --config-file "$NOTARY_CONFIG" > /tmp/notary.log 2>&1 &
+else
+  echo "No notary config found — using ephemeral key (run ./scripts/generate-notary-key.sh for persistent keys)"
+  cargo run --release > /tmp/notary.log 2>&1 &
+fi
 NOTARY_PID=$!
 sleep 3
 

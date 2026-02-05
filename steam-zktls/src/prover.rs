@@ -17,8 +17,8 @@ use tracing::info;
 use types::{OwnedGamesResponse, SteamOwnershipClaim, VanityUrlResponse};
 
 const STEAM_API_HOST: &str = "api.steampowered.com";
-const NOTARY_HOST: &str = "127.0.0.1";
-const NOTARY_PORT: u16 = 7047;
+const DEFAULT_NOTARY_HOST: &str = "127.0.0.1";
+const DEFAULT_NOTARY_PORT: u16 = 7047;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Generate zkTLS proof of Steam game ownership")]
@@ -57,6 +57,13 @@ async fn main() -> Result<()> {
     let steam_id = resolve_vanity_url(&args.steam_key, &args.vanity_url).await?;
     info!("Resolved Steam ID: {}", steam_id);
 
+    // Resolve notary host/port from env vars (or defaults)
+    let notary_host = std::env::var("NOTARY_HOST").unwrap_or_else(|_| DEFAULT_NOTARY_HOST.to_string());
+    let notary_port: u16 = std::env::var("NOTARY_PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(DEFAULT_NOTARY_PORT);
+
     // Step 2: Generate zkTLS attestation for owned games API call
     generate_attestation(
         &args.steam_key,
@@ -64,6 +71,8 @@ async fn main() -> Result<()> {
         &steam_id,
         args.app_id,
         &args.output,
+        &notary_host,
+        notary_port,
     )
     .await?;
 
@@ -104,6 +113,8 @@ async fn generate_attestation(
     steam_id: &str,
     app_id: u32,
     output_prefix: &str,
+    notary_host: &str,
+    notary_port: u16,
 ) -> Result<()> {
     // Build the request path - query only the specific game using appids_filter
     // This keeps the response small and private (doesn't expose other games)
@@ -113,10 +124,10 @@ async fn generate_attestation(
     );
 
     // Connect to notary server
-    info!("Connecting to notary server at {}:{}", NOTARY_HOST, NOTARY_PORT);
+    info!("Connecting to notary server at {}:{}", notary_host, notary_port);
     let notary_client = NotaryClient::builder()
-        .host(NOTARY_HOST)
-        .port(NOTARY_PORT)
+        .host(notary_host)
+        .port(notary_port)
         .enable_tls(false) // No TLS for localhost
         .build()?;
 
