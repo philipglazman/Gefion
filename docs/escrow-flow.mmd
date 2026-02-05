@@ -1,0 +1,35 @@
+flowchart TD
+    Start((Buyer wants a game)) --> CreateTrade
+
+    subgraph Pending["USDC locked in escrow"]
+        CreateTrade["Buyer calls createTrade()+ approves USDC"]
+        PendingCheck{Who acts next?}
+        CreateTrade --> PendingCheck
+    end
+
+    PendingCheck -->|"Buyer calls cancelTrade() (changed mind)"| Cancelled
+    PendingCheck -->|"24hr pass, no seller responseBuyer calls reclaimIfNotAcknowledged()"| RefundedTimeout
+    PendingCheck -->|"Seller gifts game on Steam, calls acknowledge()"| Ack
+
+    subgraph Acknowledged["ACK"]
+        Ack["Seller ACKS "]
+        AckCheck{Dispute Window}
+        Ack --> AckCheck
+    end
+
+    AckCheck -->|"zkTLS proof proof of ownership via Steam API"| ProofCheck
+    AckCheck -->|"No proof within 1hr Seller calls claimAfterWindow()"| CompletedTimeout
+
+    ProofCheck{"Buyer owns game on steam?"}
+    ProofCheck -->|"Yes"| CompletedProof
+    ProofCheck -->|"No"| RefundedProof
+
+    CompletedProof["COMPLETED USDC → Seller"]:::completed
+    CompletedTimeout["COMPLETED USDC → Seller"]:::completed
+    RefundedProof["REFUNDED USDC → Buyer"]:::refunded
+    RefundedTimeout["REFUNDED USDC → Buyer"]:::refunded
+    Cancelled["CANCELLED USDC → Buyer"]:::cancelled
+
+    classDef completed fill:#22c55e,color:#fff,stroke:#16a34a
+    classDef refunded fill:#f59e0b,color:#fff,stroke:#d97706
+    classDef cancelled fill:#94a3b8,color:#fff,stroke:#64748b
