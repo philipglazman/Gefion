@@ -1,6 +1,6 @@
 # Steam zkTLS Ownership Verifier
 
-Prove Steam game ownership using zkTLS (TLSNotary) without revealing your full game library.
+Prove Steam game ownership (or non-ownership) using zkTLS without revealing anything else.
 
 ## Usage
 
@@ -13,54 +13,48 @@ cd tlsn/crates/notary/server && cargo run --release
 # Terminal 2: Generate and verify proof
 cd steam-zktls
 
-# Step 1: Generate attestation
+# Generate proof for a game you own
 ./target/release/prover -v ohnoitspanda -a 730
-
-# Step 2: Create selective disclosure (reveals only appid)
 ./target/release/present -a 730
-
-# Step 3: Verify
 ./target/release/verifier -a 730
+# Output: yes
+
+# Generate proof for a game you don't own
+./target/release/prover -v ohnoitspanda -a 1245620
+./target/release/present -a 1245620
+./target/release/verifier -a 1245620
+# Output: no
 ```
 
-Output:
-```
-========================================
-  PROOF VERIFIED SUCCESSFULLY
-========================================
-Server: api.steampowered.com
-Connection time: 2024-01-15 12:34:56 UTC
-========================================
+## What It Proves
 
-Revealed data from response:
-----------------------------------------
-"appid":730
-----------------------------------------
+The proof reveals **only** `"game_count":1` or `"game_count":0` from Steam's API response.
 
-VERIFIED: User owns app_id 730 as of 2024-01-15 12:34:56
-```
-
-## What This Does
-
-Generate cryptographic proofs that a Steam user owns a specific game at a specific timestamp. The proof:
-- **Reveals**: Only `"appid":730` (the minimal proof of ownership)
-- **Hides**: Your API key, Steam ID, playtime, and all other games
+| Data | Revealed? |
+|------|-----------|
+| Owns game (yes/no) | YES |
+| Server (api.steampowered.com) | YES |
+| Timestamp | YES |
+| Steam API key | **NO** |
+| Steam ID | **NO** |
+| Playtime | **NO** |
+| Other games | **NO** |
 
 ## Setup
 
-### 1. Prerequisites
+### Prerequisites
 
-- **Rust** 1.70+ (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+- **Rust** 1.70+
 - **Steam API Key** from https://steamcommunity.com/dev/apikey
 
-### 2. Configure
+### Configure
 
 ```bash
 cp .env.example .env
 # Edit .env and add your Steam API key
 ```
 
-### 3. Build
+### Build
 
 ```bash
 cargo build --release
@@ -70,58 +64,38 @@ cargo build --release
 
 ### prover
 
-```bash
-./target/release/prover --vanity-url <USERNAME> --app-id <APP_ID>
-```
+Queries Steam API via zkTLS and generates attestation.
 
-| Option | Description |
-|--------|-------------|
-| `-v, --vanity-url` | Steam username (from profile URL) |
-| `-a, --app-id` | Game's Steam app ID |
-| `-s, --steam-key` | API key (optional if in .env) |
-| `-o, --output` | Output file prefix (default: `steam_ownership`) |
+```bash
+./target/release/prover -v <USERNAME> -a <APP_ID>
+```
 
 ### present
 
-```bash
-./target/release/present --app-id <APP_ID>
-```
+Creates selective disclosure (reveals only `game_count`).
 
-Creates selective disclosure presentation revealing only the appid.
+```bash
+./target/release/present -a <APP_ID>
+```
 
 ### verifier
 
-```bash
-./target/release/verifier --app-id <APP_ID>
-```
+Outputs `yes` or `no`. Exit code: 0 = owns, 1 = doesn't own.
 
-Verifies the presentation and displays the proof.
+```bash
+./target/release/verifier -a <APP_ID>
+./target/release/verifier -a <APP_ID> --verbose  # detailed output
+```
 
 ## Common App IDs
 
 | Game | App ID |
 |------|--------|
 | Counter-Strike 2 | 730 |
+| Elden Ring | 1245620 |
 | Portal 2 | 620 |
 | Terraria | 105600 |
-| Among Us | 945360 |
-| Factorio | 427520 |
 | DOTA 2 | 570 |
-
-Find more at https://steamdb.info/
-
-## Privacy Guarantees
-
-| Data | In Proof? |
-|------|-----------|
-| Steam API key | **NO** |
-| Steam ID | **NO** |
-| Playtime | **NO** |
-| Game name | **NO** |
-| Other owned games | **NO** |
-| Target app_id only | YES |
-| Server (api.steampowered.com) | YES |
-| Timestamp | YES |
 
 ## How It Works
 
@@ -135,12 +109,15 @@ Find more at https://steamdb.info/
      └──────────────────────────────────────────┘
 ```
 
-1. **Prover** connects to Steam API using MPC-TLS
-2. **Notary** collaboratively executes TLS without seeing plaintext
-3. **Notary** signs commitments to the encrypted transcript
-4. **Prover** creates selective disclosure, revealing only the appid
-5. **Verifier** confirms data came from Steam at that timestamp
+1. Prover queries Steam: "Does user X own game Y?"
+2. Steam returns `game_count: 1` (yes) or `game_count: 0` (no)
+3. Notary signs the TLS session without seeing plaintext
+4. Presentation reveals only `game_count` value
+5. Verifier outputs `yes` or `no`
 
 ## License
 
 MIT
+
+Sources:
+- [Steam Web API - appids_filter](https://steamapi.xpaw.me/)

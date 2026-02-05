@@ -104,10 +104,11 @@ async fn generate_attestation(
     app_id: u32,
     output_prefix: &str,
 ) -> Result<()> {
-    // Build the request path (we'll hide the API key in the presentation)
+    // Build the request path - query only the specific game using appids_filter
+    // This keeps the response small and private (doesn't expose other games)
     let request_path = format!(
-        "/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=true&format=json",
-        api_key, steam_id
+        "/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&appids_filter%5B0%5D={}&format=json",
+        api_key, steam_id, app_id
     );
 
     // Connect to notary server
@@ -121,7 +122,7 @@ async fn generate_attestation(
     // Request notarization
     let notarization_request = NotarizationRequest::builder()
         .max_sent_data(1024)
-        .max_recv_data(65536) // Steam API can return large responses
+        .max_recv_data(4096) // Filtered response is small
         .build()?;
 
     let Accepted {
@@ -178,23 +179,14 @@ async fn generate_attestation(
 
     info!("Received response from Steam API ({} bytes)", body_str.len());
 
-    // Parse response to verify ownership before continuing
-    let owned_games: OwnedGamesResponse = serde_json::from_str(&body_str)?;
-    let owns_game = owned_games
-        .response
-        .games
-        .as_ref()
-        .map(|games| games.iter().any(|g| g.appid == app_id))
-        .unwrap_or(false);
+    // Parse response to check ownership (filtered API returns game_count: 0 or 1)
+    let owns_game = body_str.contains("\"game_count\":1");
 
-    if !owns_game {
-        return Err(anyhow!(
-            "User does not own app_id {}. Cannot generate proof.",
-            app_id
-        ));
+    if owns_game {
+        info!("User OWNS app_id {}", app_id);
+    } else {
+        info!("User does NOT own app_id {}", app_id);
     }
-
-    info!("Verified: user owns app_id {}", app_id);
 
     // Get the prover back after connection closes
     let prover = prover_task.await??;
@@ -235,7 +227,7 @@ async fn generate_attestation(
         vanity_url: vanity_url.to_string(),
         steam_id: steam_id.to_string(),
         app_id,
-        owns_game: true,
+        owns_game,
     };
     tokio::fs::write(&claim_path, serde_json::to_string_pretty(&claim)?).await?;
 
