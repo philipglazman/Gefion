@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ExternalLink, Clock, Package, ShoppingCart, CheckCircle, AlertCircle, XCircle, Loader2 } from 'lucide-react';
 import { TransactionEvent } from '../types';
 import api from '../services/api';
+import { getTxExplorerUrl } from '../config';
 
 interface TransactionHistoryProps {
   tradeId: number;
@@ -162,13 +163,19 @@ export function TransactionHistory({ tradeId, title, onClose }: TransactionHisto
                           <div className="text-slate-500">
                             From: <span className="font-mono">{formatAddress(event.from)}</span>
                           </div>
-                          <a
-                            href={`#tx/${event.txHash}`}
-                            className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
-                          >
-                            <span className="font-mono">{formatTxHash(event.txHash)}</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          {getTxExplorerUrl(event.txHash) ? (
+                            <a
+                              href={getTxExplorerUrl(event.txHash)!}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                            >
+                              <span className="font-mono">{formatTxHash(event.txHash)}</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : (
+                            <span className="font-mono text-slate-500">{formatTxHash(event.txHash)}</span>
+                          )}
                         </div>
                       </div>
                     </div>

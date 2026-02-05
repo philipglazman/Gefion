@@ -178,7 +178,9 @@ Accounts 1-4 are pre-funded with 10,000 USDC each:
 |--------|-------------|
 | `scripts/start-anvil.sh` | Start local Anvil blockchain |
 | `scripts/deploy.sh` | Deploy contracts to Anvil |
-| `scripts/start-all.sh` | Start all services |
+| `scripts/start-all.sh` | Start all services (local) |
+| `scripts/deploy-monad.sh` | Deploy contracts to Monad Testnet |
+| `scripts/start-monad.sh` | Start all services (Monad Testnet) |
 
 ## Development
 
@@ -198,3 +200,70 @@ cast send <ADDRESS> --value 100ether --rpc-url http://localhost:8545 --private-k
 # Mint USDC
 cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 "mint(address,uint256)" <ADDRESS> 10000000000 --rpc-url http://localhost:8545 --private-key 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
+
+## Monad Testnet Deployment
+
+Deploy and run Forage on Monad Testnet instead of local Anvil.
+
+### Network Details
+
+| Property | Value |
+|----------|-------|
+| Chain ID | `10143` |
+| RPC URL | `https://testnet-rpc.monad.xyz` |
+| Explorer | `https://testnet.monadexplorer.com` |
+| Currency | MON |
+
+### Prerequisites
+
+1. Get MON tokens for gas from the Monad testnet faucet
+2. Have a funded wallet with its private key
+
+### 1. Deploy Contracts
+
+```bash
+PRIVATE_KEY=0x... ./scripts/deploy-monad.sh
+```
+
+This deploys MockUSDC, SteamGameEscrow, SteamOwnershipVerifier, and SteamGameVerifier to Monad Testnet.
+
+### 2. Update Backend Config
+
+After deployment, update `backend/src/config/contracts.json` with the deployed addresses from the script output:
+
+```json
+{
+  "usdc": "0x...",
+  "escrow": "0x...",
+  "verifier": "0x...",
+  "ownershipVerifier": "0x..."
+}
+```
+
+### 3. Start Services
+
+```bash
+VERIFIER_PRIVATE_KEY=0x... ./scripts/start-monad.sh
+```
+
+This starts:
+- TLSNotary server on `http://localhost:7047`
+- Backend on `http://localhost:3001`
+- Frontend on `http://localhost:5173`
+
+### 4. Connect MetaMask
+
+The frontend will automatically prompt to add Monad Testnet to MetaMask when you connect. Alternatively, add it manually:
+
+- Network Name: `Monad Testnet`
+- RPC URL: `https://testnet-rpc.monad.xyz`
+- Chain ID: `10143`
+- Currency Symbol: `MON`
+- Explorer: `https://testnet.monadexplorer.com`
+
+### Logs
+
+Service logs are available at:
+- Notary: `/tmp/notary.log`
+- Backend: `/tmp/backend.log`
+- Frontend: `/tmp/frontend.log`

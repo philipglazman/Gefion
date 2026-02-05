@@ -41,6 +41,12 @@ export class BlockchainService {
       throw new Error('No accounts found');
     }
 
+    // Chain configurations for wallet_addEthereumChain
+    const chainConfigs: Record<number, { name: string; symbol: string; rpcUrl: string; explorerUrl?: string }> = {
+      31337: { name: 'Anvil Local', symbol: 'ETH', rpcUrl: 'http://localhost:8545' },
+      10143: { name: 'Monad Testnet', symbol: 'MON', rpcUrl: 'https://testnet-rpc.monad.xyz', explorerUrl: 'https://testnet.monadexplorer.com' },
+    };
+
     // Check/switch chain
     const network = await this.provider.getNetwork();
     if (Number(network.chainId) !== config.chainId) {
@@ -52,14 +58,19 @@ export class BlockchainService {
       } catch (e: unknown) {
         // Chain not added, try to add it
         if ((e as { code?: number }).code === 4902) {
+          const chainConfig = chainConfigs[config.chainId] || { name: 'Unknown', symbol: 'ETH', rpcUrl: config.rpcUrl };
+          const addChainParams: Record<string, unknown> = {
+            chainId: `0x${config.chainId.toString(16)}`,
+            chainName: chainConfig.name,
+            rpcUrls: [chainConfig.rpcUrl],
+            nativeCurrency: { name: chainConfig.symbol, symbol: chainConfig.symbol, decimals: 18 },
+          };
+          if (chainConfig.explorerUrl) {
+            addChainParams.blockExplorerUrls = [chainConfig.explorerUrl];
+          }
           await window.ethereum.request({
             method: 'wallet_addEthereumChain',
-            params: [{
-              chainId: `0x${config.chainId.toString(16)}`,
-              chainName: 'Anvil Local',
-              rpcUrls: [config.rpcUrl],
-              nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-            }],
+            params: [addChainParams],
           });
         } else {
           throw e;

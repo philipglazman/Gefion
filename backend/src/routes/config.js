@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { blockchain } from '../services/blockchain.js';
+import { config } from '../config/index.js';
 
 const router = Router();
 
@@ -8,8 +9,9 @@ router.get('/', async (req, res) => {
   try {
     res.json({
       contracts: blockchain.getContractAddresses(),
-      chainId: 31337,
-      rpcUrl: 'http://localhost:8545'
+      chainId: config.chainId,
+      rpcUrl: config.rpcUrl,
+      explorerUrl: config.explorerUrl
     });
   } catch (error) {
     res.status(500).json({ error: error.message });
