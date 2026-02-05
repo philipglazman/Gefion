@@ -34,13 +34,11 @@ contract DeployScript is Script {
 
         vm.stopBroadcast();
 
-        // Write addresses to file for backend to read
-        string memory json = string(abi.encodePacked(
-            '{"usdc":"', vm.toString(address(usdc)),
-            '","escrow":"', vm.toString(address(escrow)),
-            '","verifier":"', vm.toString(verifier), '"}'
-        ));
-        vm.writeFile("../backend/src/config/contracts.json", json);
-        console.log("Contract addresses written to backend/src/config/contracts.json");
+        // Log addresses for manual config update
+        console.log("=== Contract Addresses ===");
+        console.log("USDC:", address(usdc));
+        console.log("Escrow:", address(escrow));
+        console.log("Verifier:", verifier);
+        console.log("=========================");
     }
 }

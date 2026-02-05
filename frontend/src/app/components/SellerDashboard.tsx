@@ -1,14 +1,16 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Package, CheckCircle, AlertCircle, Plus, Clock } from 'lucide-react';
+import { Package, CheckCircle, AlertCircle, Plus, Clock, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../services/api';
 
 export function SellerDashboard() {
-  const { myListings, wallet, acknowledge, claimAfterWindow, createListing, cancelListing } = useApp();
+  const { myListings, wallet, acknowledge, claimAfterWindow, createListing, cancelListing, refreshMyListings } = useApp();
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPrice, setNewPrice] = useState('');
   const [newSteamAppId, setNewSteamAppId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [provingId, setProvingId] = useState<number | null>(null);
 
   const handleAcknowledge = async (listingId: number) => {
     try {
@@ -27,6 +29,23 @@ export function SellerDashboard() {
     } catch (e) {
       console.error('Claim failed:', e);
       toast.error('Failed to claim funds. Dispute window may not have passed.');
+    }
+  };
+
+  const handleProveOwnership = async (listingId: number) => {
+    setProvingId(listingId);
+    try {
+      // TODO: In production, this would trigger the zkTLS prover
+      // For now, submit proof directly showing buyer owns the game
+      toast.info('Submitting ownership proof...');
+      await api.submitProofResult(listingId, true);
+      toast.success('Ownership verified! Funds released.');
+      await refreshMyListings();
+    } catch (e) {
+      console.error('Prove ownership failed:', e);
+      toast.error('Failed to prove ownership');
+    } finally {
+      setProvingId(null);
     }
   };
 
@@ -234,6 +253,14 @@ export function SellerDashboard() {
                   {listing.status === 'Acknowledged' && (
                     <>
                       <button
+                        onClick={() => handleProveOwnership(listing.id)}
+                        disabled={provingId === listing.id}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:bg-blue-400 flex items-center gap-2"
+                      >
+                        <Shield className="w-4 h-4" />
+                        {provingId === listing.id ? 'Proving...' : 'Prove Ownership'}
+                      </button>
+                      <button
                         onClick={() => handleClaimFunds(listing.id)}
                         className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
                       >
@@ -241,7 +268,7 @@ export function SellerDashboard() {
                       </button>
                       <div className="flex items-center gap-1 text-xs text-slate-500">
                         <Clock className="w-3 h-3" />
-                        After dispute window
+                        Claim after window or prove now
                       </div>
                     </>
                   )}

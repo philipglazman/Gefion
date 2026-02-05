@@ -4,8 +4,10 @@ out = "out"
 libs = ["lib"]
 script = "script"
 solc = "0.8.20"
+evm_version = "cancun"
 optimizer = true
 optimizer_runs = 200
+ignore = ["lib/openzeppelin-contracts/certora/**", "lib/openzeppelin-contracts/test/**"]
 
 [profile.default.fmt]
 line_length = 100
@@ -13,6 +15,6 @@ tab_width = 4
 bracket_spacing = false
 
 remappings = [
-    "@openzeppelin/=lib/openzeppelin-contracts/",
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
     "forge-std/=lib/forge-std/src/"
 ]

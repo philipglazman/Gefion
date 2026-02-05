@@ -38,6 +38,20 @@ const api = {
       throw new Error(data.error || 'Verification failed');
     }
   },
+
+  // Submit proof result directly (for testing or when proof is generated)
+  async submitProofResult(listingId: number, buyerOwnsGame: boolean): Promise<{ txHash: string }> {
+    const res = await fetch(`${config.apiUrl}/api/verifier/submit-proof`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ listingId, buyerOwnsGame }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to submit proof');
+    }
+    return res.json();
+  },
 };
 
 export default api;
