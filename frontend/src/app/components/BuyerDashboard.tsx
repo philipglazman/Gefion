@@ -14,8 +14,7 @@ export function BuyerDashboard() {
   const handleConfirmReceipt = async (tradeId: number) => {
     setConfirmingId(tradeId);
     try {
-      toast.info('Running zkTLS verification to confirm receipt...');
-      // Run zkTLS proof to verify buyer owns the game - releases funds to seller
+      toast.info('Running zkTLS verification...');
       const result = await api.requestVerification(tradeId);
       if (result.ownsGame) {
         toast.success('Receipt confirmed! Funds released to seller.');
@@ -25,7 +24,7 @@ export function BuyerDashboard() {
       await refreshMyListings();
     } catch (e) {
       console.error('Confirm receipt failed:', e);
-      toast.error(`Failed to confirm receipt: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      toast.error(`Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setConfirmingId(null);
     }
@@ -38,26 +37,22 @@ export function BuyerDashboard() {
       if (!result.ownsGame) {
         toast.success('Dispute successful! Funds refunded.');
       } else {
-        toast.info('Verification shows you own the game - funds released to seller.');
+        toast.info('Verification shows you own the game - funds released.');
       }
       await refreshMyListings();
     } catch (e) {
-      console.error('Verification request failed:', e);
-      toast.error(`Verification failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      console.error('Verification failed:', e);
+      toast.error(`Failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
 
   if (!wallet.connected) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-8 text-center">
-          <AlertCircle className="w-12 h-12 text-amber-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
-            Wallet Not Connected
-          </h2>
-          <p className="text-slate-600">
-            Please connect your wallet to view your purchases
-          </p>
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+        <div className="bg-[#1a1a1a] border border-white/10 rounded p-6 text-center max-w-sm">
+          <AlertCircle className="w-10 h-10 text-[#ffaa00] mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-white mb-1">Wallet Not Connected</h2>
+          <p className="text-gray-400 text-sm">Connect your wallet to view purchases</p>
         </div>
       </div>
     );
@@ -66,7 +61,7 @@ export function BuyerDashboard() {
   const buyerListings = myListings.buying;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-[#121212]">
       {selectedListing && (
         <TransactionHistory
           tradeId={selectedListing.id}
@@ -75,31 +70,33 @@ export function BuyerDashboard() {
         />
       )}
 
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-slate-900 mb-2">My Purchases</h1>
-        <p className="text-slate-600">Track your game purchases and manage disputes</p>
-      </div>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <h1 className="text-xl font-bold text-white mb-1">Library</h1>
+          <p className="text-gray-400 text-sm">Track purchases and manage disputes</p>
+        </div>
 
-      {buyerListings.length === 0 ? (
-        <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
-          <ShoppingBag className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">No purchases yet</h3>
-          <p className="text-slate-600">Your purchases will appear here</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {buyerListings.map((listing) => (
-            <PurchaseCard
-              key={listing.id}
-              listing={listing}
-              onRequestVerification={handleRequestVerification}
-              onConfirmReceipt={handleConfirmReceipt}
-              onViewHistory={() => setSelectedListing(listing)}
-              isConfirming={confirmingId === listing.id}
-            />
-          ))}
-        </div>
-      )}
+        {buyerListings.length === 0 ? (
+          <div className="bg-[#1a1a1a] rounded border border-white/5 p-12 text-center">
+            <ShoppingBag className="w-12 h-12 text-gray-600 mx-auto mb-3" />
+            <h3 className="text-sm font-medium text-white mb-1">No purchases yet</h3>
+            <p className="text-gray-500 text-xs">Your purchased games will appear here</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {buyerListings.map((listing) => (
+              <PurchaseCard
+                key={listing.id}
+                listing={listing}
+                onRequestVerification={handleRequestVerification}
+                onConfirmReceipt={handleConfirmReceipt}
+                onViewHistory={() => setSelectedListing(listing)}
+                isConfirming={confirmingId === listing.id}
+              />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -124,7 +121,7 @@ function PurchaseCard({
 
     const interval = setInterval(() => {
       const now = Date.now();
-      const deadline = listing.disputeDeadline! * 1000; // Convert seconds to ms
+      const deadline = listing.disputeDeadline! * 1000;
       const difference = deadline - now;
 
       if (difference > 0) {
@@ -143,98 +140,104 @@ function PurchaseCard({
   const canDispute = listing.status === 'Acknowledged' && timeLeft !== 'Expired';
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 p-6">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-3">
-            <h3 className="text-xl font-semibold text-slate-900">
-              {listing.title || `Game #${listing.steamAppId}`}
-            </h3>
-            <StatusBadge status={listing.status} />
+    <div className="bg-[#1a1a1a] rounded border border-white/5 overflow-hidden">
+      <div className="flex">
+        {listing.image && (
+          <div className="w-32 flex-shrink-0">
+            <img src={listing.image} alt={listing.title} className="w-full h-full object-cover" />
           </div>
+        )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
-            <div>
-              <div className="text-slate-500 mb-1">Seller</div>
-              <div className="font-medium text-slate-900">
-                {listing.seller.slice(0, 10)}...{listing.seller.slice(-8)}
+        <div className="flex-1 p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-white truncate">
+                  {listing.title || `Game #${listing.steamAppId}`}
+                </h3>
+                <StatusBadge status={listing.status} />
               </div>
-            </div>
-            <div>
-              <div className="text-slate-500 mb-1">Steam Username</div>
-              <div className="font-medium text-slate-900">
-                {listing.buyerSteamUsername}
+
+              <div className="grid grid-cols-4 gap-3 text-xs mb-2">
+                <div>
+                  <div className="text-gray-500 mb-0.5">Seller</div>
+                  <div className="text-white font-mono text-[10px]">
+                    {listing.seller.slice(0, 6)}...{listing.seller.slice(-4)}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-0.5">Steam User</div>
+                  <div className="text-white truncate">{listing.buyerSteamUsername}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-0.5">Amount</div>
+                  <div className="text-[#0074e4] font-bold">{listing.price} USDC</div>
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-0.5">App ID</div>
+                  <div className="text-white">{listing.steamAppId}</div>
+                </div>
               </div>
-            </div>
-            <div>
-              <div className="text-slate-500 mb-1">Amount</div>
-              <div className="font-medium text-blue-600">{listing.price} USDC</div>
-            </div>
-            <div>
-              <div className="text-slate-500 mb-1">Steam App ID</div>
-              <div className="font-medium text-slate-900">{listing.steamAppId}</div>
-            </div>
-          </div>
 
-          {canDispute && (
-            <div className="flex items-center gap-2 text-amber-700 bg-amber-50 px-4 py-3 rounded-lg">
-              <Clock className="w-5 h-5" />
-              <span className="font-medium">Dispute window closes in: {timeLeft}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="ml-6 flex flex-col gap-2">
-          <button
-            onClick={onViewHistory}
-            className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
-          >
-            <History className="w-4 h-4" />
-            View History
-          </button>
-          {listing.status === 'Pending' && (
-            <div className="text-sm text-slate-600 text-right px-4 py-2 bg-yellow-50 rounded-lg">
-              Waiting for seller to acknowledge
-            </div>
-          )}
-
-          {listing.status === 'Acknowledged' && (
-            <>
-              <button
-                onClick={() => onConfirmReceipt(listing.id)}
-                disabled={isConfirming}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap disabled:bg-green-400 flex items-center gap-2"
-              >
-                <Shield className="w-4 h-4" />
-                {isConfirming ? 'Confirming...' : 'Confirm Receipt'}
-              </button>
               {canDispute && (
-                <button
-                  onClick={() => onRequestVerification(listing.id)}
-                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors whitespace-nowrap"
-                >
-                  Dispute (Prove Non-Ownership)
-                </button>
+                <div className="inline-flex items-center gap-1.5 text-[#ffaa00] bg-[#ffaa00]/10 px-2 py-1 rounded text-xs">
+                  <Clock className="w-3 h-3" />
+                  <span>Dispute: {timeLeft}</span>
+                </div>
               )}
-              <div className="text-xs text-slate-500 text-center">
-                Confirm when you receive the game
-              </div>
-            </>
-          )}
-
-          {listing.status === 'Completed' && (
-            <div className="flex items-center gap-2 text-green-600 px-4 py-2 bg-green-50 rounded-lg">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">Completed</span>
             </div>
-          )}
 
-          {listing.status === 'Refunded' && (
-            <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
-              <CheckCircle className="w-5 h-5" />
-              <span className="font-medium">Refunded</span>
+            <div className="ml-4 flex flex-col gap-1.5">
+              <button
+                onClick={onViewHistory}
+                className="px-2.5 py-1 border border-white/10 text-gray-400 rounded hover:bg-white/5 hover:text-white transition-all text-xs flex items-center gap-1"
+              >
+                <History className="w-3 h-3" />
+                History
+              </button>
+
+              {listing.status === 'Pending' && (
+                <div className="text-[10px] text-gray-500 px-2.5 py-1 bg-[#2a2a2a] rounded text-center">
+                  Waiting for seller
+                </div>
+              )}
+
+              {listing.status === 'Acknowledged' && (
+                <>
+                  <button
+                    onClick={() => onConfirmReceipt(listing.id)}
+                    disabled={isConfirming}
+                    className="px-2.5 py-1 bg-[#00d26a] text-white rounded hover:bg-[#00b85c] transition-all disabled:opacity-50 text-xs flex items-center gap-1"
+                  >
+                    <Shield className="w-3 h-3" />
+                    {isConfirming ? 'Verifying...' : 'Confirm'}
+                  </button>
+                  {canDispute && (
+                    <button
+                      onClick={() => onRequestVerification(listing.id)}
+                      className="px-2.5 py-1 bg-[#ff4444] text-white rounded hover:bg-[#e63c3c] transition-all text-xs"
+                    >
+                      Dispute
+                    </button>
+                  )}
+                </>
+              )}
+
+              {listing.status === 'Completed' && (
+                <div className="flex items-center gap-1 text-[#00d26a] px-2.5 py-1 bg-[#00d26a]/10 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Completed
+                </div>
+              )}
+
+              {listing.status === 'Refunded' && (
+                <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Refunded
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>
@@ -243,15 +246,15 @@ function PurchaseCard({
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Acknowledged: 'bg-blue-100 text-blue-800',
-    Completed: 'bg-green-100 text-green-800',
-    Refunded: 'bg-slate-100 text-slate-800',
-    Cancelled: 'bg-slate-100 text-slate-800',
+    Pending: 'bg-[#ffaa00]/20 text-[#ffaa00]',
+    Acknowledged: 'bg-[#0074e4]/20 text-[#0074e4]',
+    Completed: 'bg-[#00d26a]/20 text-[#00d26a]',
+    Refunded: 'bg-white/10 text-gray-400',
+    Cancelled: 'bg-white/10 text-gray-400',
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-slate-100 text-slate-800'}`}>
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${styles[status] || 'bg-white/10 text-gray-400'}`}>
       {status}
     </span>
   );

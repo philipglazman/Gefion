@@ -14,7 +14,6 @@ interface OffChainListing {
   description: string;
   status: string;
   createdAt: number;
-  // Added from Steam API
   title?: string;
   image?: string;
 }
@@ -29,12 +28,10 @@ export function SellerDashboard() {
   const [isCreating, setIsCreating] = useState(false);
   const [offChainListings, setOffChainListings] = useState<OffChainListing[]>([]);
 
-  // Fetch seller's off-chain listings
   const fetchOffChainListings = async () => {
     if (!wallet.connected || !wallet.address) return;
     try {
       const listings = await api.getSellerListings(wallet.address);
-      // Enrich with Steam data
       if (listings.length > 0) {
         const appIds = listings.map(l => l.steamAppId);
         try {
@@ -63,20 +60,20 @@ export function SellerDashboard() {
   const handleAcknowledge = async (tradeId: number) => {
     try {
       await acknowledge(tradeId);
-      toast.success('Trade acknowledged! Dispute window started.');
+      toast.success('Trade acknowledged!');
     } catch (e) {
       console.error('Acknowledge failed:', e);
-      toast.error('Failed to acknowledge trade');
+      toast.error('Failed to acknowledge');
     }
   };
 
   const handleClaimFunds = async (tradeId: number) => {
     try {
       await claimAfterWindow(tradeId);
-      toast.success('Funds claimed successfully!');
+      toast.success('Funds claimed!');
     } catch (e) {
       console.error('Claim failed:', e);
-      toast.error('Failed to claim funds. Dispute window may not have passed.');
+      toast.error('Failed to claim. Window may not have passed.');
     }
   };
 
@@ -86,14 +83,14 @@ export function SellerDashboard() {
       toast.info('Running zkTLS verification...');
       const result = await api.requestVerification(tradeId);
       if (result.ownsGame) {
-        toast.success('Buyer ownership verified! Funds released.');
+        toast.success('Verified! Funds released.');
       } else {
-        toast.info('Buyer does not own the game - funds refunded to buyer.');
+        toast.info('Buyer does not own game - refunded.');
       }
       await refreshMyListings();
     } catch (e) {
-      console.error('Prove ownership failed:', e);
-      toast.error(`Verification failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
+      console.error('Prove failed:', e);
+      toast.error(`Failed: ${e instanceof Error ? e.message : 'Unknown'}`);
     } finally {
       setProvingId(null);
     }
@@ -105,12 +102,12 @@ export function SellerDashboard() {
     const steamAppId = parseInt(newSteamAppId);
 
     if (isNaN(price) || price <= 0) {
-      toast.error('Please enter a valid price');
+      toast.error('Enter a valid price');
       return;
     }
 
     if (isNaN(steamAppId) || steamAppId <= 0) {
-      toast.error('Please enter a valid Steam App ID');
+      toast.error('Enter a valid Steam App ID');
       return;
     }
 
@@ -123,7 +120,7 @@ export function SellerDashboard() {
       setNewSteamAppId('');
       await fetchOffChainListings();
     } catch (e) {
-      console.error('Create listing failed:', e);
+      console.error('Create failed:', e);
       toast.error('Failed to create listing');
     } finally {
       setIsCreating(false);
@@ -137,21 +134,17 @@ export function SellerDashboard() {
       await fetchOffChainListings();
     } catch (e) {
       console.error('Cancel failed:', e);
-      toast.error('Failed to cancel listing');
+      toast.error('Failed to cancel');
     }
   };
 
   if (!wallet.connected) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-8 text-center">
-          <AlertCircle className="w-12 h-12 text-amber-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-slate-900 mb-2">
-            Wallet Not Connected
-          </h2>
-          <p className="text-slate-600">
-            Please connect your wallet to view your seller dashboard
-          </p>
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+        <div className="bg-[#1a1a1a] border border-white/10 rounded p-6 text-center max-w-sm">
+          <AlertCircle className="w-10 h-10 text-[#ffaa00] mx-auto mb-3" />
+          <h2 className="text-base font-semibold text-white mb-1">Wallet Not Connected</h2>
+          <p className="text-gray-400 text-sm">Connect wallet to access dashboard</p>
         </div>
       </div>
     );
@@ -161,7 +154,7 @@ export function SellerDashboard() {
   const activeListings = offChainListings.filter(l => l.status === 'active');
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className="min-h-screen bg-[#121212]">
       {selectedTrade && (
         <TransactionHistory
           tradeId={selectedTrade.id}
@@ -170,232 +163,228 @@ export function SellerDashboard() {
         />
       )}
 
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Seller Dashboard</h1>
-          <p className="text-slate-600">Create listings and manage escrow trades</p>
-        </div>
-        <button
-          onClick={() => setShowCreateForm(!showCreateForm)}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          {showCreateForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
-          {showCreateForm ? 'Cancel' : 'Create Listing'}
-        </button>
-      </div>
-
-      {showCreateForm && (
-        <div className="bg-white rounded-lg border border-slate-200 p-6 mb-8">
-          <h3 className="text-lg font-semibold text-slate-900 mb-4">Create New Listing</h3>
-          <form onSubmit={handleCreateListing} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Price (USDC)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={newPrice}
-                  onChange={(e) => setNewPrice(e.target.value)}
-                  placeholder="e.g. 29.99"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">
-                  Steam App ID
-                </label>
-                <input
-                  type="number"
-                  value={newSteamAppId}
-                  onChange={(e) => setNewSteamAppId(e.target.value)}
-                  placeholder="e.g. 730 (CS2)"
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-            </div>
-            <div className="text-xs text-slate-500">
-              Common App IDs: Counter-Strike 2 (730), Elden Ring (1245620), Portal 2 (620), Euro Truck Simulator 2 (227300)
-            </div>
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={isCreating}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:bg-slate-300"
-              >
-                {isCreating ? 'Creating...' : 'Create Listing'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowCreateForm(false)}
-                className="px-4 py-2 border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Active Listings Section */}
-      <div className="mb-12">
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">Your Listings</h2>
-        {activeListings.length === 0 ? (
-          <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No active listings</h3>
-            <p className="text-slate-600">Create a listing to start selling games</p>
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-white mb-1">Seller Dashboard</h1>
+            <p className="text-gray-400 text-sm">Create listings and manage trades</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeListings.map((listing) => (
-              <div key={listing.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
-                {listing.image && (
-                  <img src={listing.image} alt={listing.title} className="w-full h-32 object-cover" />
-                )}
-                <div className="p-4">
-                  <h3 className="font-semibold text-slate-900 mb-1">
-                    {listing.title || `Game #${listing.steamAppId}`}
-                  </h3>
-                  <div className="text-lg font-bold text-blue-600 mb-3">${listing.price} USDC</div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-500">ID: {listing.steamAppId}</span>
-                    <button
-                      onClick={() => handleCancelListing(listing.id)}
-                      className="text-sm text-red-600 hover:text-red-700"
-                    >
-                      Cancel
-                    </button>
-                  </div>
+          <button
+            onClick={() => setShowCreateForm(!showCreateForm)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0074e4] text-white text-xs font-medium rounded hover:bg-[#0066cc] transition-all"
+          >
+            {showCreateForm ? <X className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+            {showCreateForm ? 'Cancel' : 'Create Listing'}
+          </button>
+        </div>
+
+        {showCreateForm && (
+          <div className="bg-[#1a1a1a] rounded border border-white/5 p-4 mb-6">
+            <h3 className="text-sm font-semibold text-white mb-3">Create New Listing</h3>
+            <form onSubmit={handleCreateListing} className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Price (USDC)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(e.target.value)}
+                    placeholder="29.99"
+                    className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1">Steam App ID</label>
+                  <input
+                    type="number"
+                    value={newSteamAppId}
+                    onChange={(e) => setNewSteamAppId(e.target.value)}
+                    placeholder="730"
+                    className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4]"
+                  />
                 </div>
               </div>
-            ))}
+              <p className="text-[10px] text-gray-500">
+                Common IDs: CS2 (730), Elden Ring (1245620), Portal 2 (620)
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  disabled={isCreating}
+                  className="px-3 py-1.5 bg-[#00d26a] text-white text-xs font-medium rounded hover:bg-[#00b85c] transition-all disabled:opacity-50"
+                >
+                  {isCreating ? 'Creating...' : 'Create'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="px-3 py-1.5 border border-white/10 text-gray-400 rounded hover:bg-white/5 transition-all text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         )}
-      </div>
 
-      {/* Incoming Trades Section */}
-      <div>
-        <h2 className="text-xl font-semibold text-slate-900 mb-4">Incoming Trades</h2>
-        {sellerTrades.length === 0 ? (
-          <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
-            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">No incoming trades</h3>
-            <p className="text-slate-600">When buyers initiate escrow with you, trades appear here</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sellerTrades.map((trade) => (
-              <div
-                key={trade.id}
-                className="bg-white rounded-lg border border-slate-200 p-6"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-3">
-                      <h3 className="text-xl font-semibold text-slate-900">
-                        {trade.title || `Game #${trade.steamAppId}`}
-                      </h3>
-                      <StatusBadge status={trade.status} />
+        {/* Active Listings */}
+        <div className="mb-8">
+          <h2 className="text-sm font-semibold text-white mb-3">Your Listings</h2>
+          {activeListings.length === 0 ? (
+            <div className="bg-[#1a1a1a] rounded border border-white/5 p-8 text-center">
+              <Package className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+              <h3 className="text-xs font-medium text-white mb-1">No active listings</h3>
+              <p className="text-gray-500 text-[10px]">Create a listing to start selling</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+              {activeListings.map((listing) => (
+                <div key={listing.id} className="group bg-[#1a1a1a] rounded border border-white/5 overflow-hidden hover:border-white/10 transition-all">
+                  {listing.image && (
+                    <div className="aspect-video overflow-hidden">
+                      <img src={listing.image} alt={listing.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div>
-                        <div className="text-slate-500 mb-1">Price</div>
-                        <div className="font-medium text-blue-600">{trade.price} USDC</div>
-                      </div>
-                      <div>
-                        <div className="text-slate-500 mb-1">Steam App ID</div>
-                        <div className="font-medium text-slate-900">{trade.steamAppId}</div>
-                      </div>
-                      {trade.buyer && (
-                        <>
-                          <div>
-                            <div className="text-slate-500 mb-1">Buyer</div>
-                            <div className="font-medium text-slate-900">
-                              {trade.buyer.slice(0, 10)}...{trade.buyer.slice(-8)}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-slate-500 mb-1">Steam Username</div>
-                            <div className="font-medium text-slate-900">
-                              {trade.buyerSteamUsername}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                      {trade.disputeDeadline && trade.status === 'Acknowledged' && (
-                        <div>
-                          <div className="text-slate-500 mb-1">Dispute Deadline</div>
-                          <div className="font-medium text-slate-900">
-                            {new Date(trade.disputeDeadline * 1000).toLocaleString()}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="ml-6 flex flex-col gap-2">
-                    <button
-                      onClick={() => setSelectedTrade(trade)}
-                      className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
-                    >
-                      <History className="w-4 h-4" />
-                      View History
-                    </button>
-                    {trade.status === 'Pending' && (
+                  )}
+                  <div className="p-2">
+                    <h3 className="text-xs font-medium text-white mb-0.5 truncate">
+                      {listing.title || `Game #${listing.steamAppId}`}
+                    </h3>
+                    <div className="text-sm font-bold text-[#0074e4] mb-2">{listing.price} USDC</div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-gray-500">#{listing.steamAppId}</span>
                       <button
-                        onClick={() => handleAcknowledge(trade.id)}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                        onClick={() => handleCancelListing(listing.id)}
+                        className="text-[10px] text-[#ff4444] hover:text-[#ff6666] transition-colors"
                       >
-                        Acknowledge Trade
+                        Cancel
                       </button>
-                    )}
-                    {trade.status === 'Acknowledged' && (
-                      <>
-                        <button
-                          onClick={() => handleProveOwnership(trade.id)}
-                          disabled={provingId === trade.id}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:bg-blue-400 flex items-center gap-2"
-                        >
-                          <Shield className="w-4 h-4" />
-                          {provingId === trade.id ? 'Proving...' : 'Prove Ownership'}
-                        </button>
-                        <button
-                          onClick={() => handleClaimFunds(trade.id)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-                        >
-                          Claim Funds
-                        </button>
-                        <div className="flex items-center gap-1 text-xs text-slate-500">
-                          <Clock className="w-3 h-3" />
-                          Claim after window or prove now
-                        </div>
-                      </>
-                    )}
-                    {trade.status === 'Completed' && (
-                      <div className="flex items-center gap-2 text-green-600 px-4 py-2 bg-green-50 rounded-lg">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="font-medium">Completed</span>
-                      </div>
-                    )}
-                    {trade.status === 'Refunded' && (
-                      <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="font-medium">Refunded</span>
-                      </div>
-                    )}
-                    {trade.status === 'Cancelled' && (
-                      <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
-                        <CheckCircle className="w-5 h-5" />
-                        <span className="font-medium">Cancelled</span>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Incoming Trades */}
+        <div>
+          <h2 className="text-sm font-semibold text-white mb-3">Incoming Trades</h2>
+          {sellerTrades.length === 0 ? (
+            <div className="bg-[#1a1a1a] rounded border border-white/5 p-8 text-center">
+              <Package className="w-10 h-10 text-gray-600 mx-auto mb-2" />
+              <h3 className="text-xs font-medium text-white mb-1">No incoming trades</h3>
+              <p className="text-gray-500 text-[10px]">Trades from buyers appear here</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {sellerTrades.map((trade) => (
+                <div key={trade.id} className="bg-[#1a1a1a] rounded border border-white/5 overflow-hidden">
+                  <div className="flex">
+                    {trade.image && (
+                      <div className="w-32 flex-shrink-0">
+                        <img src={trade.image} alt={trade.title} className="w-full h-full object-cover" />
+                      </div>
+                    )}
+                    <div className="flex-1 p-4">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-sm font-semibold text-white truncate">
+                              {trade.title || `Game #${trade.steamAppId}`}
+                            </h3>
+                            <StatusBadge status={trade.status} />
+                          </div>
+                          <div className="grid grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <div className="text-gray-500 mb-0.5">Price</div>
+                              <div className="text-[#0074e4] font-bold">{trade.price} USDC</div>
+                            </div>
+                            <div>
+                              <div className="text-gray-500 mb-0.5">App ID</div>
+                              <div className="text-white">{trade.steamAppId}</div>
+                            </div>
+                            {trade.buyer && (
+                              <>
+                                <div>
+                                  <div className="text-gray-500 mb-0.5">Buyer</div>
+                                  <div className="text-white font-mono text-[10px]">
+                                    {trade.buyer.slice(0, 6)}...{trade.buyer.slice(-4)}
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="text-gray-500 mb-0.5">Steam User</div>
+                                  <div className="text-white truncate">{trade.buyerSteamUsername}</div>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                        <div className="ml-4 flex flex-col gap-1.5">
+                          <button
+                            onClick={() => setSelectedTrade(trade)}
+                            className="px-2.5 py-1 border border-white/10 text-gray-400 rounded hover:bg-white/5 hover:text-white transition-all text-xs flex items-center gap-1"
+                          >
+                            <History className="w-3 h-3" />
+                            History
+                          </button>
+                          {trade.status === 'Pending' && (
+                            <button
+                              onClick={() => handleAcknowledge(trade.id)}
+                              className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all text-xs"
+                            >
+                              Acknowledge
+                            </button>
+                          )}
+                          {trade.status === 'Acknowledged' && (
+                            <>
+                              <button
+                                onClick={() => handleProveOwnership(trade.id)}
+                                disabled={provingId === trade.id}
+                                className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all disabled:opacity-50 text-xs flex items-center gap-1"
+                              >
+                                <Shield className="w-3 h-3" />
+                                {provingId === trade.id ? 'Proving...' : 'Verify'}
+                              </button>
+                              <button
+                                onClick={() => handleClaimFunds(trade.id)}
+                                className="px-2.5 py-1 bg-[#00d26a] text-white rounded hover:bg-[#00b85c] transition-all text-xs"
+                              >
+                                Claim
+                              </button>
+                              <p className="flex items-center gap-1 text-[10px] text-gray-500">
+                                <Clock className="w-2.5 h-2.5" />
+                                After window or verify
+                              </p>
+                            </>
+                          )}
+                          {trade.status === 'Completed' && (
+                            <div className="flex items-center gap-1 text-[#00d26a] px-2.5 py-1 bg-[#00d26a]/10 rounded text-xs">
+                              <CheckCircle className="w-3 h-3" />
+                              Completed
+                            </div>
+                          )}
+                          {trade.status === 'Refunded' && (
+                            <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
+                              <CheckCircle className="w-3 h-3" />
+                              Refunded
+                            </div>
+                          )}
+                          {trade.status === 'Cancelled' && (
+                            <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
+                              <CheckCircle className="w-3 h-3" />
+                              Cancelled
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -403,15 +392,15 @@ export function SellerDashboard() {
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    Pending: 'bg-yellow-100 text-yellow-800',
-    Acknowledged: 'bg-blue-100 text-blue-800',
-    Completed: 'bg-green-100 text-green-800',
-    Refunded: 'bg-slate-100 text-slate-800',
-    Cancelled: 'bg-slate-100 text-slate-800',
+    Pending: 'bg-[#ffaa00]/20 text-[#ffaa00]',
+    Acknowledged: 'bg-[#0074e4]/20 text-[#0074e4]',
+    Completed: 'bg-[#00d26a]/20 text-[#00d26a]',
+    Refunded: 'bg-white/10 text-gray-400',
+    Cancelled: 'bg-white/10 text-gray-400',
   };
 
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium ${styles[status] || 'bg-slate-100 text-slate-800'}`}>
+    <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${styles[status] || 'bg-white/10 text-gray-400'}`}>
       {status}
     </span>
   );

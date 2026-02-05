@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, User, Shield, Clock } from 'lucide-react';
+import { ArrowLeft, Shield, Clock, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 export function GameDetails() {
@@ -15,8 +15,13 @@ export function GameDetails() {
 
   if (!game) {
     return (
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <p className="text-center text-slate-600">Game not found</p>
+      <div className="min-h-screen bg-[#121212] flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-400">Game not found</p>
+          <Link to="/" className="text-[#0074e4] hover:underline mt-3 inline-block text-sm">
+            Back to Store
+          </Link>
+        </div>
       </div>
     );
   }
@@ -61,90 +66,128 @@ export function GameDetails() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <Link to="/" className="inline-flex items-center gap-2 text-slate-600 hover:text-slate-900 mb-6">
-        <ArrowLeft className="w-4 h-4" />
-        Back to Marketplace
-      </Link>
+    <div className="min-h-screen bg-[#121212]">
+      {/* Hero Background */}
+      <div className="relative h-[200px] overflow-hidden">
+        <div className="absolute inset-0">
+          <img
+            src={game.image}
+            alt={game.title}
+            className="w-full h-full object-cover blur-sm scale-110"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#121212] to-[#121212]/40" />
+        </div>
+      </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="grid md:grid-cols-2 gap-8 p-8">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 -mt-24 relative z-10 pb-12">
+        <Link
+          to="/"
+          className="inline-flex items-center gap-1.5 text-gray-400 hover:text-white mb-4 transition-colors text-xs"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Store
+        </Link>
+
+        <div className="grid lg:grid-cols-[1fr,320px] gap-6">
+          {/* Left Column - Game Info */}
           <div>
-            <div className="aspect-video overflow-hidden rounded-lg bg-slate-100 mb-4">
+            <div className="rounded overflow-hidden shadow-2xl mb-4">
               <img
                 src={game.image}
                 alt={game.title}
-                className="w-full h-full object-cover"
+                className="w-full aspect-video object-cover"
               />
             </div>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-slate-600">
-                <User className="w-4 h-4" />
-                <span>Seller: {game.seller}</span>
-              </div>
-              <div className="text-xs text-slate-500">
-                Seller Address: {game.sellerAddress.slice(0, 10)}...{game.sellerAddress.slice(-8)}
-              </div>
-              {game.steamAppId && (
-                <div className="text-xs text-slate-500">
-                  Steam App ID: {game.steamAppId}
+
+            <h1 className="text-xl font-bold text-white mb-2">{game.title}</h1>
+            <p className="text-gray-400 text-sm leading-relaxed mb-6">{game.description}</p>
+
+            {/* Game Details */}
+            <div className="bg-[#1a1a1a] rounded p-4">
+              <h3 className="text-white text-sm font-medium mb-3">Game Details</h3>
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="text-gray-500 mb-0.5">Steam App ID</div>
+                  <div className="text-white">{game.steamAppId}</div>
                 </div>
-              )}
+                <div>
+                  <div className="text-gray-500 mb-0.5">Seller</div>
+                  <div className="text-white">{game.seller}</div>
+                </div>
+                <div className="col-span-2">
+                  <div className="text-gray-500 mb-0.5">Seller Address</div>
+                  <div className="text-white font-mono text-[10px]">
+                    {game.sellerAddress}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div>
-            <h1 className="text-3xl font-bold text-slate-900 mb-4">{game.title}</h1>
-            <p className="text-slate-600 mb-6">{game.description}</p>
+          {/* Right Column - Purchase Card */}
+          <div className="lg:sticky lg:top-16 h-fit">
+            <div className="bg-[#1a1a1a] rounded overflow-hidden">
+              <div className="p-4">
+                <div className="text-gray-400 text-xs mb-1">Price</div>
+                <div className="text-2xl font-bold text-white mb-4">{game.price} USDC</div>
 
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-              <div className="text-sm text-slate-600 mb-1">Price</div>
-              <div className="text-3xl font-bold text-blue-600">{game.price} USDC</div>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="steam-username" className="block text-sm font-medium text-slate-700 mb-2">
-                  Steam Username
-                </label>
-                <input
-                  type="text"
-                  id="steam-username"
-                  value={steamUsername}
-                  onChange={(e) => setSteamUsername(e.target.value)}
-                  placeholder="Enter your Steam username"
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <button
-                onClick={handlePurchase}
-                disabled={isProcessing}
-                className="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-slate-300 disabled:cursor-not-allowed font-medium"
-              >
-                {isProcessing ? 'Processing...' : wallet.connected ? 'Buy Now & Deposit to Escrow' : 'Connect Wallet & Buy'}
-              </button>
-
-              {wallet.connected && (
-                <p className="text-sm text-center text-slate-500">
-                  Balance: {wallet.balance.toFixed(2)} USDC
-                </p>
-              )}
-            </div>
-
-            <div className="mt-8 space-y-3">
-              <div className="flex items-start gap-3 text-sm text-slate-600">
-                <Shield className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium text-slate-900">Escrow Protection</div>
-                  <div>Your funds are held in escrow until the seller delivers the game</div>
+                <div className="space-y-3 mb-4">
+                  <div>
+                    <label htmlFor="steam-username" className="block text-xs text-gray-400 mb-1.5">
+                      Your Steam Username
+                    </label>
+                    <input
+                      type="text"
+                      id="steam-username"
+                      value={steamUsername}
+                      onChange={(e) => setSteamUsername(e.target.value)}
+                      placeholder="Enter Steam username"
+                      className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4] focus:border-transparent transition-all"
+                    />
+                  </div>
                 </div>
+
+                <button
+                  onClick={handlePurchase}
+                  disabled={isProcessing}
+                  className="w-full py-2.5 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing
+                    ? 'Processing...'
+                    : wallet.connected
+                    ? 'Buy Now'
+                    : 'Connect Wallet & Buy'}
+                </button>
+
+                {wallet.connected && (
+                  <p className="text-center text-gray-500 text-xs mt-2">
+                    Balance: {wallet.balance.toFixed(2)} USDC
+                  </p>
+                )}
               </div>
-              <div className="flex items-start gap-3 text-sm text-slate-600">
-                <Clock className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div>
-                  <div className="font-medium text-slate-900">1 Hour Dispute Window</div>
-                  <div>You have 1 hour to dispute if you don't receive the game</div>
+
+              {/* Trust Indicators */}
+              <div className="border-t border-white/5 p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <Shield className="w-4 h-4 text-[#00d26a] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-white text-xs font-medium">Escrow Protection</div>
+                    <div className="text-gray-500 text-[10px]">Funds held until delivery</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Clock className="w-4 h-4 text-[#0074e4] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-white text-xs font-medium">1 Hour Dispute Window</div>
+                    <div className="text-gray-500 text-[10px]">Time to verify and dispute</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <CheckCircle className="w-4 h-4 text-[#00b4d8] flex-shrink-0 mt-0.5" />
+                  <div>
+                    <div className="text-white text-xs font-medium">zkTLS Verified</div>
+                    <div className="text-gray-500 text-[10px]">Cryptographic ownership proof</div>
+                  </div>
                 </div>
               </div>
             </div>
