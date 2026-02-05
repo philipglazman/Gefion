@@ -18,17 +18,28 @@ const CHAIN_CONFIGS = {
   },
 };
 
-// Load contract addresses from deploy script output
-let contracts = {
+// Load contract addresses from deploy script output, keyed by chain ID
+const emptyContracts = {
   usdc: '',
   escrow: '',
   verifier: '',
   ownershipVerifier: ''
 };
 
+let contracts = { ...emptyContracts };
+
 const contractsPath = join(__dirname, 'contracts.json');
 if (existsSync(contractsPath)) {
-  contracts = JSON.parse(readFileSync(contractsPath, 'utf-8'));
+  const allContracts = JSON.parse(readFileSync(contractsPath, 'utf-8'));
+  const chainId = String(process.env.CHAIN_ID || 31337);
+
+  if (allContracts[chainId]) {
+    // New format: keyed by chain ID
+    contracts = allContracts[chainId];
+  } else if (allContracts.usdc) {
+    // Legacy flat format: use as-is
+    contracts = allContracts;
+  }
 }
 
 // Determine chain ID from environment or default to local
