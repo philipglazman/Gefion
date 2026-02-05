@@ -11,31 +11,39 @@ export function BuyerDashboard() {
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
-  const handleConfirmReceipt = async (listingId: number) => {
-    setConfirmingId(listingId);
+  const handleConfirmReceipt = async (tradeId: number) => {
+    setConfirmingId(tradeId);
     try {
-      toast.info('Proving game ownership...');
-      // Submit proof that buyer owns the game - releases funds to seller
-      await api.submitProofResult(listingId, true);
-      toast.success('Receipt confirmed! Funds released to seller.');
+      toast.info('Running zkTLS verification to confirm receipt...');
+      // Run zkTLS proof to verify buyer owns the game - releases funds to seller
+      const result = await api.requestVerification(tradeId);
+      if (result.ownsGame) {
+        toast.success('Receipt confirmed! Funds released to seller.');
+      } else {
+        toast.error('Verification shows you do not own the game');
+      }
       await refreshMyListings();
     } catch (e) {
       console.error('Confirm receipt failed:', e);
-      toast.error('Failed to confirm receipt');
+      toast.error(`Failed to confirm receipt: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setConfirmingId(null);
     }
   };
 
-  const handleRequestVerification = async (listingId: number) => {
-    toast.info('Requesting ownership verification...');
+  const handleRequestVerification = async (tradeId: number) => {
+    toast.info('Running zkTLS verification for dispute...');
     try {
-      await api.requestVerification(listingId);
-      toast.success('Verification requested!');
+      const result = await api.requestVerification(tradeId);
+      if (!result.ownsGame) {
+        toast.success('Dispute successful! Funds refunded.');
+      } else {
+        toast.info('Verification shows you own the game - funds released to seller.');
+      }
       await refreshMyListings();
     } catch (e) {
       console.error('Verification request failed:', e);
-      toast.error('Verification not yet implemented on backend');
+      toast.error(`Verification failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     }
   };
 
@@ -61,7 +69,7 @@ export function BuyerDashboard() {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
       {selectedListing && (
         <TransactionHistory
-          listingId={selectedListing.id}
+          tradeId={selectedListing.id}
           title={selectedListing.title || `Game #${selectedListing.steamAppId}`}
           onClose={() => setSelectedListing(null)}
         />
@@ -184,7 +192,7 @@ function PurchaseCard({
             <History className="w-4 h-4" />
             View History
           </button>
-          {listing.status === 'Purchased' && (
+          {listing.status === 'Pending' && (
             <div className="text-sm text-slate-600 text-right px-4 py-2 bg-yellow-50 rounded-lg">
               Waiting for seller to acknowledge
             </div>
@@ -235,11 +243,9 @@ function PurchaseCard({
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    Open: 'bg-green-100 text-green-800',
-    Purchased: 'bg-yellow-100 text-yellow-800',
+    Pending: 'bg-yellow-100 text-yellow-800',
     Acknowledged: 'bg-blue-100 text-blue-800',
     Completed: 'bg-green-100 text-green-800',
-    Disputed: 'bg-red-100 text-red-800',
     Refunded: 'bg-slate-100 text-slate-800',
     Cancelled: 'bg-slate-100 text-slate-800',
   };

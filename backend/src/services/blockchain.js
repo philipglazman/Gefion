@@ -1,29 +1,28 @@
 import { ethers } from 'ethers';
 import { config } from '../config/index.js';
 
-// ABIs (minimal for what we need)
+// ABIs for the new buyer-initiated escrow contract
 const ESCROW_ABI = [
-  'function createListing(uint256 price, uint256 steamAppId) external returns (uint256)',
-  'function cancelListing(uint256 listingId) external',
-  'function purchase(uint256 listingId, string calldata steamUsername) external',
-  'function acknowledge(uint256 listingId) external',
-  'function claimAfterWindow(uint256 listingId) external',
-  'function submitProofResult(uint256 listingId, bool buyerOwnsGame) external',
-  'function getListing(uint256 listingId) external view returns (tuple(address seller, uint256 price, uint256 steamAppId, uint8 status, address buyer, string buyerSteamUsername, uint256 acknowledgedAt))',
-  'function nextListingId() external view returns (uint256)',
-  'event ListingCreated(uint256 indexed listingId, address indexed seller, uint256 price, uint256 steamAppId)',
-  'event ListingCancelled(uint256 indexed listingId)',
-  'event GamePurchased(uint256 indexed listingId, address indexed buyer, string steamUsername)',
-  'event SaleAcknowledged(uint256 indexed listingId)',
-  'event FundsReleased(uint256 indexed listingId, address indexed recipient)',
-  'event FundsRefunded(uint256 indexed listingId, address indexed recipient)'
+  'function createTrade(uint256 steamAppId, address seller, string calldata steamUsername) external returns (uint256)',
+  'function cancelTrade(uint256 tradeId) external',
+  'function reclaimIfNotAcknowledged(uint256 tradeId) external',
+  'function acknowledge(uint256 tradeId) external',
+  'function claimAfterWindow(uint256 tradeId) external',
+  'function submitProofResult(uint256 tradeId, bool buyerOwnsGame) external',
+  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt))',
+  'function nextTradeId() external view returns (uint256)',
+  'function getAcknowledgedAt(uint256 tradeId) external view returns (uint256)',
+  'event TradeCreated(uint256 indexed tradeId, address indexed buyer, address indexed seller, uint256 price, uint256 steamAppId, string steamUsername)',
+  'event TradeCancelled(uint256 indexed tradeId)',
+  'event TradeAcknowledged(uint256 indexed tradeId)',
+  'event FundsReleased(uint256 indexed tradeId, address indexed recipient)',
+  'event FundsRefunded(uint256 indexed tradeId, address indexed recipient)'
 ];
 
 const EVENT_NAMES = [
-  'ListingCreated',
-  'ListingCancelled',
-  'GamePurchased',
-  'SaleAcknowledged',
+  'TradeCreated',
+  'TradeCancelled',
+  'TradeAcknowledged',
   'FundsReleased',
   'FundsRefunded'
 ];
@@ -34,14 +33,22 @@ const USDC_ABI = [
   'function allowance(address owner, address spender) external view returns (uint256)'
 ];
 
+// SteamGameVerifier ABI - the contract that validates zkTLS proofs and calls escrow
+const VERIFIER_ABI = [
+  'function verifyAndResolve(uint256 tradeId, bytes32 messageHash, uint8 v, bytes32 r, bytes32 s, string calldata serverName, uint64 timestamp, bool ownsGame, bytes32 transcriptHash) external',
+  'function verifyAndResolvePacked(uint256 tradeId, bytes calldata proof) external',
+  'event TradeResolved(uint256 indexed tradeId, bool buyerOwnsGame, uint64 proofTimestamp, bytes32 transcriptHash)'
+];
+
 class BlockchainService {
   constructor() {
     this.provider = new ethers.JsonRpcProvider(config.rpcUrl);
-    this.verifierWallet = new ethers.Wallet(config.verifierPrivateKey, this.provider);
+    this.wallet = new ethers.Wallet(config.verifierPrivateKey, this.provider);
 
     if (config.contracts.escrow) {
-      this.escrow = new ethers.Contract(config.contracts.escrow, ESCROW_ABI, this.verifierWallet);
+      this.escrow = new ethers.Contract(config.contracts.escrow, ESCROW_ABI, this.wallet);
       this.usdc = new ethers.Contract(config.contracts.usdc, USDC_ABI, this.provider);
+      this.verifier = new ethers.Contract(config.contracts.verifier, VERIFIER_ABI, this.wallet);
     }
   }
 
@@ -53,37 +60,37 @@ class BlockchainService {
     return config.contracts;
   }
 
-  async getListing(listingId) {
-    const listing = await this.escrow.getListing(listingId);
-    return this.formatListing(listingId, listing);
+  async getTrade(tradeId) {
+    const trade = await this.escrow.getTrade(tradeId);
+    return this.formatTrade(tradeId, trade);
   }
 
-  async getAllListings() {
-    const nextId = await this.escrow.nextListingId();
-    const listings = [];
+  async getAllTrades() {
+    const nextId = await this.escrow.nextTradeId();
+    const trades = [];
 
     for (let i = 0; i < nextId; i++) {
       try {
-        const listing = await this.escrow.getListing(i);
-        listings.push(this.formatListing(i, listing));
+        const trade = await this.escrow.getTrade(i);
+        trades.push(this.formatTrade(i, trade));
       } catch (e) {
-        // Skip invalid listings
+        // Skip invalid trades
       }
     }
 
-    return listings;
+    return trades;
   }
 
-  async getOpenListings() {
-    const all = await this.getAllListings();
-    return all.filter(l => l.status === 'Open');
+  async getPendingTrades() {
+    const all = await this.getAllTrades();
+    return all.filter(t => t.status === 'Pending');
   }
 
-  async getListingsByAddress(address) {
-    const all = await this.getAllListings();
+  async getTradesByAddress(address) {
+    const all = await this.getAllTrades();
     return {
-      selling: all.filter(l => l.seller.toLowerCase() === address.toLowerCase()),
-      buying: all.filter(l => l.buyer && l.buyer.toLowerCase() === address.toLowerCase())
+      selling: all.filter(t => t.seller.toLowerCase() === address.toLowerCase()),
+      buying: all.filter(t => t.buyer && t.buyer.toLowerCase() === address.toLowerCase())
     };
   }
 
@@ -92,35 +99,54 @@ class BlockchainService {
     return ethers.formatUnits(balance, 6);
   }
 
-  // Verifier function - submit proof result
-  async submitProofResult(listingId, buyerOwnsGame) {
-    const tx = await this.escrow.submitProofResult(listingId, buyerOwnsGame);
+  // Submit zkTLS proof to the SteamGameVerifier contract
+  // proof should contain: messageHash, v, r, s, serverName, timestamp, ownsGame, transcriptHash
+  async submitProofToVerifier(tradeId, proof) {
+    const tx = await this.verifier.verifyAndResolve(
+      tradeId,
+      proof.messageHash,
+      proof.v,
+      proof.r,
+      proof.s,
+      proof.serverName,
+      proof.timestamp,
+      proof.ownsGame,
+      proof.transcriptHash
+    );
     await tx.wait();
     return tx.hash;
   }
 
-  formatListing(id, listing) {
-    const statusMap = ['Open', 'Purchased', 'Acknowledged', 'Completed', 'Disputed', 'Refunded', 'Cancelled'];
+  // Submit packed proof to the SteamGameVerifier contract
+  async submitPackedProofToVerifier(tradeId, packedProof) {
+    const tx = await this.verifier.verifyAndResolvePacked(tradeId, packedProof);
+    await tx.wait();
+    return tx.hash;
+  }
+
+  formatTrade(id, trade) {
+    const statusMap = ['Pending', 'Acknowledged', 'Completed', 'Refunded', 'Cancelled'];
     return {
       id: Number(id),
-      seller: listing.seller,
-      price: ethers.formatUnits(listing.price, 6),
-      steamAppId: Number(listing.steamAppId),
-      status: statusMap[listing.status],
-      buyer: listing.buyer === ethers.ZeroAddress ? null : listing.buyer,
-      buyerSteamUsername: listing.buyerSteamUsername || null,
-      acknowledgedAt: listing.acknowledgedAt > 0 ? Number(listing.acknowledgedAt) : null,
-      disputeDeadline: listing.acknowledgedAt > 0 ? Number(listing.acknowledgedAt) + 3600 : null
+      buyer: trade.buyer === ethers.ZeroAddress ? null : trade.buyer,
+      seller: trade.seller,
+      steamAppId: Number(trade.steamAppId),
+      price: ethers.formatUnits(trade.price, 6),
+      buyerSteamUsername: trade.buyerSteamUsername || null,
+      status: statusMap[trade.status],
+      createdAt: trade.createdAt > 0 ? Number(trade.createdAt) : null,
+      acknowledgedAt: trade.acknowledgedAt > 0 ? Number(trade.acknowledgedAt) : null,
+      disputeDeadline: trade.acknowledgedAt > 0 ? Number(trade.acknowledgedAt) + 3600 : null
     };
   }
 
-  async getListingHistory(listingId) {
+  async getTradeHistory(tradeId) {
     const events = [];
 
-    // Query all event types for this listing
+    // Query all event types for this trade
     for (const eventName of EVENT_NAMES) {
       try {
-        const filter = this.escrow.filters[eventName](listingId);
+        const filter = this.escrow.filters[eventName](tradeId);
         const logs = await this.escrow.queryFilter(filter, 0, 'latest');
 
         for (const log of logs) {
@@ -149,31 +175,27 @@ class BlockchainService {
 
   formatEventArgs(eventName, args) {
     switch (eventName) {
-      case 'ListingCreated':
+      case 'TradeCreated':
         return {
-          listingId: Number(args.listingId),
+          tradeId: Number(args.tradeId),
+          buyer: args.buyer,
           seller: args.seller,
           price: ethers.formatUnits(args.price, 6),
-          steamAppId: Number(args.steamAppId)
-        };
-      case 'ListingCancelled':
-        return { listingId: Number(args.listingId) };
-      case 'GamePurchased':
-        return {
-          listingId: Number(args.listingId),
-          buyer: args.buyer,
+          steamAppId: Number(args.steamAppId),
           steamUsername: args.steamUsername
         };
-      case 'SaleAcknowledged':
-        return { listingId: Number(args.listingId) };
+      case 'TradeCancelled':
+        return { tradeId: Number(args.tradeId) };
+      case 'TradeAcknowledged':
+        return { tradeId: Number(args.tradeId) };
       case 'FundsReleased':
         return {
-          listingId: Number(args.listingId),
+          tradeId: Number(args.tradeId),
           recipient: args.recipient
         };
       case 'FundsRefunded':
         return {
-          listingId: Number(args.listingId),
+          tradeId: Number(args.tradeId),
           recipient: args.recipient
         };
       default:

@@ -27,36 +27,65 @@ const api = {
     return data.balance;
   },
 
-  async requestVerification(listingId: number): Promise<void> {
+  // Run full zkTLS verification for a trade
+  async requestVerification(tradeId: number): Promise<{ txHash: string; ownsGame: boolean }> {
     const res = await fetch(`${config.apiUrl}/api/verifier/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ listingId }),
+      body: JSON.stringify({ tradeId }),
     });
     if (!res.ok) {
       const data = await res.json();
       throw new Error(data.error || 'Verification failed');
     }
+    return res.json();
   },
 
-  // Submit proof result directly (for testing or when proof is generated)
-  async submitProofResult(listingId: number, buyerOwnsGame: boolean): Promise<{ txHash: string }> {
-    const res = await fetch(`${config.apiUrl}/api/verifier/submit-proof`, {
+  // Check if notary server is running
+  async getVerifierStatus(): Promise<{ notaryRunning: boolean; hint: string }> {
+    const res = await fetch(`${config.apiUrl}/api/verifier/status`);
+    if (!res.ok) throw new Error('Failed to check verifier status');
+    return res.json();
+  },
+
+  // Get transaction history for a trade
+  async getTradeHistory(tradeId: number): Promise<TransactionEvent[]> {
+    const res = await fetch(`${config.apiUrl}/api/listings/trades/${tradeId}/history`);
+    if (!res.ok) throw new Error('Failed to fetch history');
+    return res.json();
+  },
+
+  // Create an off-chain listing (seller)
+  async createListing(seller: string, steamAppId: number, price: number): Promise<{ id: number }> {
+    const res = await fetch(`${config.apiUrl}/api/listings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ listingId, buyerOwnsGame }),
+      body: JSON.stringify({ seller, steamAppId, price }),
     });
     if (!res.ok) {
       const data = await res.json();
-      throw new Error(data.error || 'Failed to submit proof');
+      throw new Error(data.error || 'Failed to create listing');
     }
     return res.json();
   },
 
-  // Get transaction history for a listing
-  async getListingHistory(listingId: number): Promise<TransactionEvent[]> {
-    const res = await fetch(`${config.apiUrl}/api/listings/${listingId}/history`);
-    if (!res.ok) throw new Error('Failed to fetch history');
+  // Cancel an off-chain listing (seller)
+  async cancelListing(listingId: number, seller: string): Promise<void> {
+    const res = await fetch(`${config.apiUrl}/api/listings/${listingId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ seller }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.error || 'Failed to cancel listing');
+    }
+  },
+
+  // Get seller's off-chain listings
+  async getSellerListings(seller: string): Promise<Listing[]> {
+    const res = await fetch(`${config.apiUrl}/api/listings/seller/${seller}`);
+    if (!res.ok) throw new Error('Failed to fetch seller listings');
     return res.json();
   },
 
@@ -76,6 +105,14 @@ const api = {
     });
     if (!res.ok) throw new Error('Failed to fetch game details');
     return res.json();
+  },
+
+  // Mark off-chain listing as sold when trade initiated
+  async markListingSold(listingId: number): Promise<void> {
+    const res = await fetch(`${config.apiUrl}/api/listings/${listingId}/initiate`, {
+      method: 'POST',
+    });
+    if (!res.ok) throw new Error('Failed to mark listing as sold');
   },
 };
 

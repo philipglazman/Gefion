@@ -14,11 +14,10 @@ interface AppContextType {
   myListings: { selling: Listing[]; buying: Listing[] };
   refreshMyListings: () => Promise<void>;
   // Contract interactions
-  purchase: (listingId: number, steamUsername: string, price: number) => Promise<string>;
-  createListing: (price: number, steamAppId: number) => Promise<number>;
-  acknowledge: (listingId: number) => Promise<string>;
-  claimAfterWindow: (listingId: number) => Promise<string>;
-  cancelListing: (listingId: number) => Promise<string>;
+  purchase: (steamAppId: number, seller: string, steamUsername: string, price: number, listingId?: number) => Promise<string>;
+  acknowledge: (tradeId: number) => Promise<string>;
+  claimAfterWindow: (tradeId: number) => Promise<string>;
+  cancelTrade: (tradeId: number) => Promise<string>;
   // Legacy support
   games: Game[];
   isLoading: boolean;
@@ -168,36 +167,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMyListings({ selling: [], buying: [] });
   };
 
-  const purchase = async (listingId: number, steamUsername: string, price: number) => {
-    const txHash = await blockchain.purchase(listingId, steamUsername, price);
+  const purchase = async (steamAppId: number, seller: string, steamUsername: string, price: number, listingId?: number) => {
+    const txHash = await blockchain.createTrade(steamAppId, seller, steamUsername, price);
+    // Mark off-chain listing as sold if listingId provided
+    if (listingId) {
+      try {
+        await api.markListingSold(listingId);
+      } catch (e) {
+        console.error('Failed to mark listing as sold:', e);
+      }
+    }
     await refreshBalance();
     await refreshListings();
     await refreshMyListings();
     return txHash;
   };
 
-  const createListing = async (price: number, steamAppId: number) => {
-    const listingId = await blockchain.createListing(price, steamAppId);
-    await refreshListings();
-    await refreshMyListings();
-    return listingId;
-  };
-
-  const acknowledge = async (listingId: number) => {
-    const txHash = await blockchain.acknowledge(listingId);
+  const acknowledge = async (tradeId: number) => {
+    const txHash = await blockchain.acknowledge(tradeId);
     await refreshMyListings();
     return txHash;
   };
 
-  const claimAfterWindow = async (listingId: number) => {
-    const txHash = await blockchain.claimAfterWindow(listingId);
+  const claimAfterWindow = async (tradeId: number) => {
+    const txHash = await blockchain.claimAfterWindow(tradeId);
     await refreshBalance();
     await refreshMyListings();
     return txHash;
   };
 
-  const cancelListing = async (listingId: number) => {
-    const txHash = await blockchain.cancelListing(listingId);
+  const cancelTrade = async (tradeId: number) => {
+    const txHash = await blockchain.cancelTrade(tradeId);
     await refreshListings();
     await refreshMyListings();
     return txHash;
@@ -228,10 +228,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         myListings,
         refreshMyListings,
         purchase,
-        createListing,
         acknowledge,
         claimAfterWindow,
-        cancelListing,
+        cancelTrade,
         games,
         isLoading,
       }}

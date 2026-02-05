@@ -2,14 +2,13 @@ import { BrowserProvider, Contract, formatUnits, parseUnits, Eip1193Provider } f
 import { config } from '../config';
 
 const ESCROW_ABI = [
-  'function createListing(uint256 price, uint256 steamAppId) external returns (uint256)',
-  'function cancelListing(uint256 listingId) external',
-  'function purchase(uint256 listingId, string calldata steamUsername) external',
-  'function acknowledge(uint256 listingId) external',
-  'function claimAfterWindow(uint256 listingId) external',
-  'function getListing(uint256 listingId) external view returns (tuple(address seller, uint256 price, uint256 steamAppId, uint8 status, address buyer, string buyerSteamUsername, uint256 acknowledgedAt))',
-  'function nextListingId() external view returns (uint256)',
-  'event ListingCreated(uint256 indexed listingId, address indexed seller, uint256 price, uint256 steamAppId)',
+  'function createTrade(uint256 steamAppId, address seller, string calldata steamUsername) external returns (uint256)',
+  'function cancelTrade(uint256 tradeId) external',
+  'function acknowledge(uint256 tradeId) external',
+  'function claimAfterWindow(uint256 tradeId) external',
+  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt))',
+  'function nextTradeId() external view returns (uint256)',
+  'event TradeCreated(uint256 indexed tradeId, address indexed buyer, address indexed seller, uint256 steamAppId, uint256 price)',
 ];
 
 const USDC_ABI = [
@@ -85,7 +84,7 @@ export class BlockchainService {
     return Number(formatUnits(balance, 6));
   }
 
-  async purchase(listingId: number, steamUsername: string, price: number): Promise<string> {
+  async createTrade(steamAppId: number, seller: string, steamUsername: string, price: number): Promise<string> {
     if (!this.escrow || !this.usdc || !this.provider) {
       throw new Error('Not connected');
     }
@@ -102,24 +101,10 @@ export class BlockchainService {
       await approveTx.wait();
     }
 
-    // Purchase
-    const tx = await this.escrow.purchase(listingId, steamUsername);
+    // Create trade (buyer-initiated escrow)
+    const tx = await this.escrow.createTrade(steamAppId, seller, steamUsername);
     const receipt = await tx.wait();
     return receipt.hash;
-  }
-
-  async createListing(price: number, steamAppId: number): Promise<number> {
-    if (!this.escrow) throw new Error('Not connected');
-
-    const priceInUnits = parseUnits(price.toString(), 6);
-    const tx = await this.escrow.createListing(priceInUnits, steamAppId);
-    const receipt = await tx.wait();
-
-    // Parse listing ID from event
-    const event = receipt.logs.find((log: { fragment?: { name: string } }) =>
-      log.fragment?.name === 'ListingCreated'
-    );
-    return event ? Number(event.args[0]) : 0;
   }
 
   async acknowledge(listingId: number): Promise<string> {
@@ -136,9 +121,9 @@ export class BlockchainService {
     return receipt.hash;
   }
 
-  async cancelListing(listingId: number): Promise<string> {
+  async cancelTrade(tradeId: number): Promise<string> {
     if (!this.escrow) throw new Error('Not connected');
-    const tx = await this.escrow.cancelListing(listingId);
+    const tx = await this.escrow.cancelTrade(tradeId);
     const receipt = await tx.wait();
     return receipt.hash;
   }

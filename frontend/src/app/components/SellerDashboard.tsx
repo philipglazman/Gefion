@@ -1,33 +1,78 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Package, CheckCircle, AlertCircle, Plus, Clock, Shield, History } from 'lucide-react';
+import { Package, CheckCircle, AlertCircle, Clock, Shield, History, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { TransactionHistory } from './TransactionHistory';
 import { Listing } from '../types';
 
+interface OffChainListing {
+  id: number;
+  seller: string;
+  steamAppId: number;
+  price: number;
+  description: string;
+  status: string;
+  createdAt: number;
+  // Added from Steam API
+  title?: string;
+  image?: string;
+}
+
 export function SellerDashboard() {
-  const { myListings, wallet, acknowledge, claimAfterWindow, createListing, cancelListing, refreshMyListings } = useApp();
+  const { myListings, wallet, acknowledge, claimAfterWindow, refreshMyListings } = useApp();
+  const [provingId, setProvingId] = useState<number | null>(null);
+  const [selectedTrade, setSelectedTrade] = useState<Listing | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newPrice, setNewPrice] = useState('');
   const [newSteamAppId, setNewSteamAppId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
-  const [provingId, setProvingId] = useState<number | null>(null);
-  const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
+  const [offChainListings, setOffChainListings] = useState<OffChainListing[]>([]);
 
-  const handleAcknowledge = async (listingId: number) => {
+  // Fetch seller's off-chain listings
+  const fetchOffChainListings = async () => {
+    if (!wallet.connected || !wallet.address) return;
     try {
-      await acknowledge(listingId);
-      toast.success('Sale acknowledged! Dispute window started.');
+      const listings = await api.getSellerListings(wallet.address);
+      // Enrich with Steam data
+      if (listings.length > 0) {
+        const appIds = listings.map(l => l.steamAppId);
+        try {
+          const steamData = await api.getSteamGames(appIds);
+          const enriched = listings.map(l => ({
+            ...l,
+            title: steamData[l.steamAppId]?.name || `Game #${l.steamAppId}`,
+            image: steamData[l.steamAppId]?.headerImage,
+          }));
+          setOffChainListings(enriched);
+        } catch {
+          setOffChainListings(listings);
+        }
+      } else {
+        setOffChainListings([]);
+      }
     } catch (e) {
-      console.error('Acknowledge failed:', e);
-      toast.error('Failed to acknowledge sale');
+      console.error('Failed to fetch listings:', e);
     }
   };
 
-  const handleClaimFunds = async (listingId: number) => {
+  useEffect(() => {
+    fetchOffChainListings();
+  }, [wallet.connected, wallet.address]);
+
+  const handleAcknowledge = async (tradeId: number) => {
     try {
-      await claimAfterWindow(listingId);
+      await acknowledge(tradeId);
+      toast.success('Trade acknowledged! Dispute window started.');
+    } catch (e) {
+      console.error('Acknowledge failed:', e);
+      toast.error('Failed to acknowledge trade');
+    }
+  };
+
+  const handleClaimFunds = async (tradeId: number) => {
+    try {
+      await claimAfterWindow(tradeId);
       toast.success('Funds claimed successfully!');
     } catch (e) {
       console.error('Claim failed:', e);
@@ -35,30 +80,22 @@ export function SellerDashboard() {
     }
   };
 
-  const handleProveOwnership = async (listingId: number) => {
-    setProvingId(listingId);
+  const handleProveOwnership = async (tradeId: number) => {
+    setProvingId(tradeId);
     try {
-      // TODO: In production, this would trigger the zkTLS prover
-      // For now, submit proof directly showing buyer owns the game
-      toast.info('Submitting ownership proof...');
-      await api.submitProofResult(listingId, true);
-      toast.success('Ownership verified! Funds released.');
+      toast.info('Running zkTLS verification...');
+      const result = await api.requestVerification(tradeId);
+      if (result.ownsGame) {
+        toast.success('Buyer ownership verified! Funds released.');
+      } else {
+        toast.info('Buyer does not own the game - funds refunded to buyer.');
+      }
       await refreshMyListings();
     } catch (e) {
       console.error('Prove ownership failed:', e);
-      toast.error('Failed to prove ownership');
+      toast.error(`Verification failed: ${e instanceof Error ? e.message : 'Unknown error'}`);
     } finally {
       setProvingId(null);
-    }
-  };
-
-  const handleCancel = async (listingId: number) => {
-    try {
-      await cancelListing(listingId);
-      toast.success('Listing cancelled');
-    } catch (e) {
-      console.error('Cancel failed:', e);
-      toast.error('Failed to cancel listing');
     }
   };
 
@@ -79,16 +116,28 @@ export function SellerDashboard() {
 
     setIsCreating(true);
     try {
-      const listingId = await createListing(price, steamAppId);
-      toast.success(`Listing created! ID: ${listingId}`);
+      const result = await api.createListing(wallet.address, steamAppId, price);
+      toast.success(`Listing created! ID: ${result.id}`);
       setShowCreateForm(false);
       setNewPrice('');
       setNewSteamAppId('');
+      await fetchOffChainListings();
     } catch (e) {
       console.error('Create listing failed:', e);
       toast.error('Failed to create listing');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const handleCancelListing = async (listingId: number) => {
+    try {
+      await api.cancelListing(listingId, wallet.address);
+      toast.success('Listing cancelled');
+      await fetchOffChainListings();
+    } catch (e) {
+      console.error('Cancel failed:', e);
+      toast.error('Failed to cancel listing');
     }
   };
 
@@ -108,29 +157,30 @@ export function SellerDashboard() {
     );
   }
 
-  const sellerListings = myListings.selling;
+  const sellerTrades = myListings.selling;
+  const activeListings = offChainListings.filter(l => l.status === 'active');
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      {selectedListing && (
+      {selectedTrade && (
         <TransactionHistory
-          listingId={selectedListing.id}
-          title={selectedListing.title || `Game #${selectedListing.steamAppId}`}
-          onClose={() => setSelectedListing(null)}
+          tradeId={selectedTrade.id}
+          title={selectedTrade.title || `Game #${selectedTrade.steamAppId}`}
+          onClose={() => setSelectedTrade(null)}
         />
       )}
 
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 mb-2">Seller Dashboard</h1>
-          <p className="text-slate-600">Manage your listings and sales</p>
+          <p className="text-slate-600">Create listings and manage escrow trades</p>
         </div>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
-          <Plus className="w-5 h-5" />
-          Create Listing
+          {showCreateForm ? <X className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
+          {showCreateForm ? 'Cancel' : 'Create Listing'}
         </button>
       </div>
 
@@ -166,7 +216,7 @@ export function SellerDashboard() {
               </div>
             </div>
             <div className="text-xs text-slate-500">
-              Common App IDs: Counter-Strike 2 (730), Elden Ring (1245620), Portal 2 (620), Dota 2 (570)
+              Common App IDs: Counter-Strike 2 (730), Elden Ring (1245620), Portal 2 (620), Euro Truck Simulator 2 (227300)
             </div>
             <div className="flex gap-3">
               <button
@@ -188,131 +238,174 @@ export function SellerDashboard() {
         </div>
       )}
 
-      {sellerListings.length === 0 ? (
-        <div className="bg-white rounded-lg border border-slate-200 p-12 text-center">
-          <Package className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-slate-900 mb-2">No listings yet</h3>
-          <p className="text-slate-600">Create a listing to start selling games</p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sellerListings.map((listing) => (
-            <div
-              key={listing.id}
-              className="bg-white rounded-lg border border-slate-200 p-6"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
-                    <h3 className="text-xl font-semibold text-slate-900">
-                      {listing.title || `Game #${listing.steamAppId}`}
-                    </h3>
-                    <StatusBadge status={listing.status} />
+      {/* Active Listings Section */}
+      <div className="mb-12">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">Your Listings</h2>
+        {activeListings.length === 0 ? (
+          <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
+            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">No active listings</h3>
+            <p className="text-slate-600">Create a listing to start selling games</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {activeListings.map((listing) => (
+              <div key={listing.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                {listing.image && (
+                  <img src={listing.image} alt={listing.title} className="w-full h-32 object-cover" />
+                )}
+                <div className="p-4">
+                  <h3 className="font-semibold text-slate-900 mb-1">
+                    {listing.title || `Game #${listing.steamAppId}`}
+                  </h3>
+                  <div className="text-lg font-bold text-blue-600 mb-3">${listing.price} USDC</div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-500">ID: {listing.steamAppId}</span>
+                    <button
+                      onClick={() => handleCancelListing(listing.id)}
+                      className="text-sm text-red-600 hover:text-red-700"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <div className="text-slate-500 mb-1">Price</div>
-                      <div className="font-medium text-blue-600">{listing.price} USDC</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Incoming Trades Section */}
+      <div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">Incoming Trades</h2>
+        {sellerTrades.length === 0 ? (
+          <div className="bg-white rounded-lg border border-slate-200 p-8 text-center">
+            <Package className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-lg font-medium text-slate-900 mb-2">No incoming trades</h3>
+            <p className="text-slate-600">When buyers initiate escrow with you, trades appear here</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {sellerTrades.map((trade) => (
+              <div
+                key={trade.id}
+                className="bg-white rounded-lg border border-slate-200 p-6"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-3">
+                      <h3 className="text-xl font-semibold text-slate-900">
+                        {trade.title || `Game #${trade.steamAppId}`}
+                      </h3>
+                      <StatusBadge status={trade.status} />
                     </div>
-                    <div>
-                      <div className="text-slate-500 mb-1">Steam App ID</div>
-                      <div className="font-medium text-slate-900">{listing.steamAppId}</div>
-                    </div>
-                    {listing.buyer && (
-                      <>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <div className="text-slate-500 mb-1">Price</div>
+                        <div className="font-medium text-blue-600">{trade.price} USDC</div>
+                      </div>
+                      <div>
+                        <div className="text-slate-500 mb-1">Steam App ID</div>
+                        <div className="font-medium text-slate-900">{trade.steamAppId}</div>
+                      </div>
+                      {trade.buyer && (
+                        <>
+                          <div>
+                            <div className="text-slate-500 mb-1">Buyer</div>
+                            <div className="font-medium text-slate-900">
+                              {trade.buyer.slice(0, 10)}...{trade.buyer.slice(-8)}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-slate-500 mb-1">Steam Username</div>
+                            <div className="font-medium text-slate-900">
+                              {trade.buyerSteamUsername}
+                            </div>
+                          </div>
+                        </>
+                      )}
+                      {trade.disputeDeadline && trade.status === 'Acknowledged' && (
                         <div>
-                          <div className="text-slate-500 mb-1">Buyer</div>
+                          <div className="text-slate-500 mb-1">Dispute Deadline</div>
                           <div className="font-medium text-slate-900">
-                            {listing.buyer.slice(0, 10)}...{listing.buyer.slice(-8)}
+                            {new Date(trade.disputeDeadline * 1000).toLocaleString()}
                           </div>
                         </div>
-                        <div>
-                          <div className="text-slate-500 mb-1">Steam Username</div>
-                          <div className="font-medium text-slate-900">
-                            {listing.buyerSteamUsername}
-                          </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="ml-6 flex flex-col gap-2">
+                    <button
+                      onClick={() => setSelectedTrade(trade)}
+                      className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
+                    >
+                      <History className="w-4 h-4" />
+                      View History
+                    </button>
+                    {trade.status === 'Pending' && (
+                      <button
+                        onClick={() => handleAcknowledge(trade.id)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
+                      >
+                        Acknowledge Trade
+                      </button>
+                    )}
+                    {trade.status === 'Acknowledged' && (
+                      <>
+                        <button
+                          onClick={() => handleProveOwnership(trade.id)}
+                          disabled={provingId === trade.id}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:bg-blue-400 flex items-center gap-2"
+                        >
+                          <Shield className="w-4 h-4" />
+                          {provingId === trade.id ? 'Proving...' : 'Prove Ownership'}
+                        </button>
+                        <button
+                          onClick={() => handleClaimFunds(trade.id)}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+                        >
+                          Claim Funds
+                        </button>
+                        <div className="flex items-center gap-1 text-xs text-slate-500">
+                          <Clock className="w-3 h-3" />
+                          Claim after window or prove now
                         </div>
                       </>
                     )}
-                    {listing.disputeDeadline && listing.status === 'Acknowledged' && (
-                      <div>
-                        <div className="text-slate-500 mb-1">Dispute Deadline</div>
-                        <div className="font-medium text-slate-900">
-                          {new Date(listing.disputeDeadline * 1000).toLocaleString()}
-                        </div>
+                    {trade.status === 'Completed' && (
+                      <div className="flex items-center gap-2 text-green-600 px-4 py-2 bg-green-50 rounded-lg">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-medium">Completed</span>
+                      </div>
+                    )}
+                    {trade.status === 'Refunded' && (
+                      <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-medium">Refunded</span>
+                      </div>
+                    )}
+                    {trade.status === 'Cancelled' && (
+                      <div className="flex items-center gap-2 text-slate-600 px-4 py-2 bg-slate-100 rounded-lg">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-medium">Cancelled</span>
                       </div>
                     )}
                   </div>
                 </div>
-                <div className="ml-6 flex flex-col gap-2">
-                  <button
-                    onClick={() => setSelectedListing(listing)}
-                    className="px-4 py-2 border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 transition-colors whitespace-nowrap flex items-center gap-2"
-                  >
-                    <History className="w-4 h-4" />
-                    View History
-                  </button>
-                  {listing.status === 'Open' && (
-                    <button
-                      onClick={() => handleCancel(listing.id)}
-                      className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors whitespace-nowrap"
-                    >
-                      Cancel Listing
-                    </button>
-                  )}
-                  {listing.status === 'Purchased' && (
-                    <button
-                      onClick={() => handleAcknowledge(listing.id)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap"
-                    >
-                      Acknowledge Sale
-                    </button>
-                  )}
-                  {listing.status === 'Acknowledged' && (
-                    <>
-                      <button
-                        onClick={() => handleProveOwnership(listing.id)}
-                        disabled={provingId === listing.id}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors whitespace-nowrap disabled:bg-blue-400 flex items-center gap-2"
-                      >
-                        <Shield className="w-4 h-4" />
-                        {provingId === listing.id ? 'Proving...' : 'Prove Ownership'}
-                      </button>
-                      <button
-                        onClick={() => handleClaimFunds(listing.id)}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-                      >
-                        Claim Funds
-                      </button>
-                      <div className="flex items-center gap-1 text-xs text-slate-500">
-                        <Clock className="w-3 h-3" />
-                        Claim after window or prove now
-                      </div>
-                    </>
-                  )}
-                  {listing.status === 'Completed' && (
-                    <div className="flex items-center gap-2 text-green-600 px-4 py-2 bg-green-50 rounded-lg">
-                      <CheckCircle className="w-5 h-5" />
-                      <span className="font-medium">Completed</span>
-                    </div>
-                  )}
-                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    Open: 'bg-green-100 text-green-800',
-    Purchased: 'bg-yellow-100 text-yellow-800',
+    Pending: 'bg-yellow-100 text-yellow-800',
     Acknowledged: 'bg-blue-100 text-blue-800',
     Completed: 'bg-green-100 text-green-800',
-    Disputed: 'bg-red-100 text-red-800',
     Refunded: 'bg-slate-100 text-slate-800',
     Cancelled: 'bg-slate-100 text-slate-800',
   };

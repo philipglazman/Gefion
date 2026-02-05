@@ -4,21 +4,20 @@ import { TransactionEvent } from '../types';
 import api from '../services/api';
 
 interface TransactionHistoryProps {
-  listingId: number;
+  tradeId: number;
   title: string;
   onClose: () => void;
 }
 
 const EVENT_CONFIG: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  ListingCreated: { label: 'Listing Created', icon: Package, color: 'text-blue-600 bg-blue-100' },
-  ListingCancelled: { label: 'Listing Cancelled', icon: XCircle, color: 'text-slate-600 bg-slate-100' },
-  GamePurchased: { label: 'Game Purchased', icon: ShoppingCart, color: 'text-purple-600 bg-purple-100' },
-  SaleAcknowledged: { label: 'Sale Acknowledged', icon: Clock, color: 'text-amber-600 bg-amber-100' },
+  TradeCreated: { label: 'Trade Created', icon: ShoppingCart, color: 'text-purple-600 bg-purple-100' },
+  TradeCancelled: { label: 'Trade Cancelled', icon: XCircle, color: 'text-slate-600 bg-slate-100' },
+  TradeAcknowledged: { label: 'Trade Acknowledged', icon: Clock, color: 'text-amber-600 bg-amber-100' },
   FundsReleased: { label: 'Funds Released', icon: CheckCircle, color: 'text-green-600 bg-green-100' },
   FundsRefunded: { label: 'Funds Refunded', icon: AlertCircle, color: 'text-red-600 bg-red-100' },
 };
 
-export function TransactionHistory({ listingId, title, onClose }: TransactionHistoryProps) {
+export function TransactionHistory({ tradeId, title, onClose }: TransactionHistoryProps) {
   const [events, setEvents] = useState<TransactionEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +26,7 @@ export function TransactionHistory({ listingId, title, onClose }: TransactionHis
     const fetchHistory = async () => {
       try {
         setLoading(true);
-        const history = await api.getListingHistory(listingId);
+        const history = await api.getTradeHistory(tradeId);
         setEvents(history);
       } catch (e) {
         console.error('Failed to fetch history:', e);
@@ -38,7 +37,7 @@ export function TransactionHistory({ listingId, title, onClose }: TransactionHis
     };
 
     fetchHistory();
-  }, [listingId]);
+  }, [tradeId]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -55,19 +54,25 @@ export function TransactionHistory({ listingId, title, onClose }: TransactionHis
   const renderEventDetails = (event: TransactionEvent) => {
     const args = event.args;
     switch (event.event) {
-      case 'ListingCreated':
+      case 'TradeCreated':
         return (
           <div className="text-sm text-slate-600">
+            <div>Buyer: {formatAddress(args.buyer as string)}</div>
             <div>Seller: {formatAddress(args.seller as string)}</div>
             <div>Price: {args.price as string} USDC</div>
             <div>Steam App ID: {args.steamAppId as number}</div>
           </div>
         );
-      case 'GamePurchased':
+      case 'TradeAcknowledged':
         return (
           <div className="text-sm text-slate-600">
-            <div>Buyer: {formatAddress(args.buyer as string)}</div>
-            <div>Steam Username: {args.steamUsername as string}</div>
+            <div>Seller acknowledged the trade</div>
+          </div>
+        );
+      case 'TradeCancelled':
+        return (
+          <div className="text-sm text-slate-600">
+            <div>Trade was cancelled by buyer</div>
           </div>
         );
       case 'FundsReleased':
@@ -89,7 +94,7 @@ export function TransactionHistory({ listingId, title, onClose }: TransactionHis
         <div className="flex items-center justify-between p-6 border-b border-slate-200">
           <div>
             <h2 className="text-xl font-semibold text-slate-900">Transaction History</h2>
-            <p className="text-sm text-slate-500">{title} (Listing #{listingId})</p>
+            <p className="text-sm text-slate-500">{title} (Trade #{tradeId})</p>
           </div>
           <button
             onClick={onClose}

@@ -41,7 +41,7 @@ export function GameDetails() {
       return;
     }
 
-    if (game.listingId === undefined) {
+    if (!game.steamAppId || !game.sellerAddress) {
       toast.error('Invalid listing');
       return;
     }
@@ -49,7 +49,7 @@ export function GameDetails() {
     setIsProcessing(true);
 
     try {
-      await purchase(game.listingId, steamUsername, game.price);
+      await purchase(game.steamAppId, game.sellerAddress, steamUsername, game.price, game.listingId);
       toast.success('Purchase initiated! Funds deposited to escrow.');
       navigate('/buyer');
     } catch (e) {
