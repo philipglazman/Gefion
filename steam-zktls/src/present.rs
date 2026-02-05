@@ -56,22 +56,13 @@ async fn main() -> Result<()> {
     // Parse HTTP transcript
     let transcript = HttpTranscript::parse(secrets.transcript())?;
 
-    // Get the raw received data
-    let recv_data = secrets.transcript().received();
-    let recv_str = String::from_utf8_lossy(recv_data);
-
-    // Find "game_count":N in the response - this is all we need to reveal
     let game_count_pattern = if claim.owns_game {
         "\"game_count\":1"
     } else {
         "\"game_count\":0"
     };
 
-    let start = recv_str.find(game_count_pattern)
-        .ok_or_else(|| anyhow!("Could not find {} in response", game_count_pattern))?;
-    let range = start..(start + game_count_pattern.len());
-
-    info!("Revealing: {}", game_count_pattern);
+    info!("Proof will show: {}", game_count_pattern);
 
     // Build transcript proof with selective disclosure
     let mut builder = secrets.transcript_proof_builder();
@@ -84,8 +75,10 @@ async fn main() -> Result<()> {
         }
     }
 
-    // Reveal only the game_count
-    builder.reveal_recv(&range)?;
+    // Reveal the response - it's already filtered to just the one game
+    // Response is ~244 bytes, contains only game_count:0 or game_count:1
+    let response = &transcript.responses[0];
+    builder.reveal_recv(response)?;
 
     let transcript_proof = builder.build()?;
 

@@ -8,6 +8,7 @@ description = "Verify Steam game ownership using zkTLS (TLSNotary)"
 # TLSNotary
 tlsn-prover = { git = "https://github.com/tlsnotary/tlsn", tag = "v0.1.0-alpha.7" }
 tlsn-core = { git = "https://github.com/tlsnotary/tlsn", tag = "v0.1.0-alpha.7" }
+tlsn-common = { git = "https://github.com/tlsnotary/tlsn", tag = "v0.1.0-alpha.7" }
 tlsn-formats = { git = "https://github.com/tlsnotary/tlsn", tag = "v0.1.0-alpha.7" }
 notary-client = { git = "https://github.com/tlsnotary/tlsn", tag = "v0.1.0-alpha.7" }
 

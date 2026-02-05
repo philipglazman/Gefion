@@ -6,6 +6,7 @@ use http_body_util::{BodyExt, Empty};
 use hyper::{body::Bytes, Request, StatusCode};
 use hyper_util::rt::TokioIo;
 use notary_client::{Accepted, NotarizationRequest, NotaryClient};
+use tlsn_common::config::ProtocolConfig;
 use tlsn_core::{request::RequestConfig, transcript::TranscriptCommitConfig};
 use tlsn_formats::http::{DefaultHttpCommitter, HttpCommit, HttpTranscript};
 use tlsn_prover::{Prover, ProverConfig};
@@ -136,6 +137,12 @@ async fn generate_attestation(
     // Configure the prover
     let config = ProverConfig::builder()
         .server_name(STEAM_API_HOST)
+        .protocol_config(
+            ProtocolConfig::builder()
+                .max_sent_data(1024)
+                .max_recv_data(4096)
+                .build()?,
+        )
         .build()?;
 
     // Create prover and set up with notary connection
