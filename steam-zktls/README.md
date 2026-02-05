@@ -118,13 +118,13 @@ Local off-chain verification for conformance testing. Outputs `yes` or `no`. Use
 ## How It Works
 
 ```
-┌─────────┐         ┌──────────┐         ┌─────────────┐
+┌─────────┐          ┌──────────┐         ┌─────────────┐
 │ Prover  │◄───MPC──►│ Notary   │         │ Steam API   │
-│         │         │ Server   │         │             │
-└────┬────┘         └──────────┘         └──────┬──────┘
-     │                                          │
-     │              TLS (encrypted)             │
-     └──────────────────────────────────────────┘
+│         │          │ Server   │         │             │
+└────┬────┘          └──────────┘         └──────┬──────┘
+     │                                           │
+     │              TLS (encrypted)              │
+     └───────────────────────────────────────────┘
 ```
 
 1. **prover** queries Steam: "Does user X own game Y?"
