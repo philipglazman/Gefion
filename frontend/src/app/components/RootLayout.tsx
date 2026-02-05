@@ -37,7 +37,7 @@ export function RootLayout() {
             <div className="flex items-center gap-8">
               <Link to="/" className="flex items-center gap-2 text-xl font-semibold text-slate-900">
                 <Gamepad2 className="w-6 h-6 text-blue-600" />
-                Forage
+                Gefion
               </Link>
               <div className="flex gap-1">
                 <Link
