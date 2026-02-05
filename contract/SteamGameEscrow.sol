@@ -4,7 +4,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title SteamGameEscrow
-/// @notice Escrow contract for trustless Steam game exchanges using USDC
+/// @notice Buyer-initiated escrow for trustless Steam game exchanges using USDC
 /// @dev Integrates with off-chain zkTLS verifier for game ownership proofs
 contract SteamGameEscrow {
     // =============================================================
@@ -15,54 +15,48 @@ contract SteamGameEscrow {
     address public verifier;
 
     uint256 public constant DISPUTE_WINDOW = 1 hours;
+    uint256 public constant ACKNOWLEDGE_DEADLINE = 24 hours;
 
-    uint256 public nextListingId;
+    uint256 public nextTradeId;
 
-    enum ListingStatus {
-        Open,
-        Purchased,
+    enum TradeStatus {
+        Pending,
         Acknowledged,
         Completed,
-        Disputed,
         Refunded,
         Cancelled
     }
 
-    struct Listing {
-        address seller;
-        uint256 price;
-        uint256 steamAppId;
-        ListingStatus status;
+    struct Trade {
         address buyer;
+        address seller;
+        uint256 steamAppId;
+        uint256 price;
         string buyerSteamUsername;
+        TradeStatus status;
+        uint256 createdAt;
         uint256 acknowledgedAt;
     }
 
-    mapping(uint256 => Listing) public listings;
+    mapping(uint256 => Trade) public trades;
 
     // =============================================================
     //                           EVENTS
     // =============================================================
 
-    event ListingCreated(
-        uint256 indexed listingId,
+    event TradeCreated(
+        uint256 indexed tradeId,
+        address indexed buyer,
         address indexed seller,
         uint256 price,
-        uint256 steamAppId
-    );
-    event ListingCancelled(uint256 indexed listingId);
-    event GamePurchased(
-        uint256 indexed listingId,
-        address indexed buyer,
+        uint256 steamAppId,
         string steamUsername
     );
-    event SaleAcknowledged(uint256 indexed listingId);
-    event FundsReleased(uint256 indexed listingId, address indexed recipient);
-    event FundsRefunded(uint256 indexed listingId, address indexed recipient);
-    event VerifierUpdated(
-        address indexed oldVerifier,
-        address indexed newVerifier
-    );
+    event TradeCancelled(uint256 indexed tradeId);
+    event TradeAcknowledged(uint256 indexed tradeId);
+    event FundsReleased(uint256 indexed tradeId, address indexed recipient);
+    event FundsRefunded(uint256 indexed tradeId, address indexed recipient);
+    event VerifierUpdated(address indexed oldVerifier, address indexed newVerifier);
 
     // =============================================================
     //                         CONSTRUCTOR
@@ -76,122 +70,134 @@ contract SteamGameEscrow {
     }
 
     // =============================================================
-    //                      SELLER FUNCTIONS
+    //                      BUYER FUNCTIONS
     // =============================================================
 
-    /// @notice Create a new game listing
-    /// @param price Price in USDC (6 decimals)
+    /// @notice Create a new trade — buyer initiates, USDC locked in escrow
     /// @param steamAppId Steam application ID for the game
-    /// @return listingId The ID of the created listing
-    function createListing(
-        uint256 price,
-        uint256 steamAppId
-    ) external returns (uint256 listingId) {
-        require(price > 0, "Price must be > 0");
+    /// @param seller Address of the seller
+    /// @param steamUsername Buyer's Steam username
+    /// @return tradeId The ID of the created trade
+    function createTrade(
+        uint256 steamAppId,
+        address seller,
+        string calldata steamUsername
+    ) external returns (uint256 tradeId) {
+        require(seller != address(0), "Invalid seller");
+        require(seller != msg.sender, "Cannot trade with self");
+        require(bytes(steamUsername).length > 0, "Empty username");
 
-        listingId = nextListingId++;
-        listings[listingId] = Listing({
-            seller: msg.sender,
-            price: price,
+        tradeId = nextTradeId++;
+        trades[tradeId] = Trade({
+            buyer: msg.sender,
+            seller: seller,
             steamAppId: steamAppId,
-            status: ListingStatus.Open,
-            buyer: address(0),
-            buyerSteamUsername: "",
+            price: 0, // set below after transfer
+            status: TradeStatus.Pending,
+            buyerSteamUsername: steamUsername,
+            createdAt: block.timestamp,
             acknowledgedAt: 0
         });
 
-        emit ListingCreated(listingId, msg.sender, price, steamAppId);
+        // Price is determined by allowance — transfer whatever buyer approved
+        // Caller must have approved this contract for the USDC amount
+        // We read the allowance to determine price
+        uint256 amount = usdc.allowance(msg.sender, address(this));
+        require(amount > 0, "No USDC approved");
+
+        trades[tradeId].price = amount;
+        usdc.transferFrom(msg.sender, address(this), amount);
+
+        emit TradeCreated(tradeId, msg.sender, seller, amount, steamAppId, steamUsername);
     }
 
-    /// @notice Cancel an unsold listing
-    /// @param listingId The listing to cancel
-    function cancelListing(uint256 listingId) external {
-        Listing storage listing = listings[listingId];
-        require(listing.status == ListingStatus.Open, "Cannot cancel");
-        require(listing.seller == msg.sender, "Not seller");
+    /// @notice Cancel a trade before the seller acknowledges
+    /// @param tradeId The trade to cancel
+    function cancelTrade(uint256 tradeId) external {
+        Trade storage trade = trades[tradeId];
+        require(trade.status == TradeStatus.Pending, "Not pending");
+        require(trade.buyer == msg.sender, "Not buyer");
 
-        listing.status = ListingStatus.Cancelled;
+        trade.status = TradeStatus.Cancelled;
+        usdc.transfer(trade.buyer, trade.price);
 
-        emit ListingCancelled(listingId);
+        emit TradeCancelled(tradeId);
     }
 
-    /// @notice Acknowledge a purchase and start the dispute window
-    /// @param listingId The listing to acknowledge
-    function acknowledge(uint256 listingId) external {
-        Listing storage listing = listings[listingId];
-        require(listing.status == ListingStatus.Purchased, "Not purchased");
-        require(listing.seller == msg.sender, "Not seller");
-
-        listing.status = ListingStatus.Acknowledged;
-        listing.acknowledgedAt = block.timestamp;
-
-        emit SaleAcknowledged(listingId);
-    }
-
-    /// @notice Claim funds after dispute window has passed
-    /// @param listingId The listing to claim funds for
-    function claimAfterWindow(uint256 listingId) external {
-        Listing storage listing = listings[listingId];
-        require(listing.status == ListingStatus.Acknowledged, "Not acknowledged");
-        require(listing.seller == msg.sender, "Not seller");
+    /// @notice Reclaim funds if seller never acknowledged within 24 hours
+    /// @param tradeId The trade to reclaim
+    function reclaimIfNotAcknowledged(uint256 tradeId) external {
+        Trade storage trade = trades[tradeId];
+        require(trade.status == TradeStatus.Pending, "Not pending");
+        require(trade.buyer == msg.sender, "Not buyer");
         require(
-            block.timestamp >= listing.acknowledgedAt + DISPUTE_WINDOW,
+            block.timestamp >= trade.createdAt + ACKNOWLEDGE_DEADLINE,
+            "Deadline not reached"
+        );
+
+        trade.status = TradeStatus.Refunded;
+        usdc.transfer(trade.buyer, trade.price);
+
+        emit FundsRefunded(tradeId, trade.buyer);
+    }
+
+    // =============================================================
+    //                      SELLER FUNCTIONS
+    // =============================================================
+
+    /// @notice Acknowledge a trade — seller claims game was transferred, starts dispute window
+    /// @param tradeId The trade to acknowledge
+    function acknowledge(uint256 tradeId) external {
+        Trade storage trade = trades[tradeId];
+        require(trade.status == TradeStatus.Pending, "Not pending");
+        require(trade.seller == msg.sender, "Not seller");
+
+        trade.status = TradeStatus.Acknowledged;
+        trade.acknowledgedAt = block.timestamp;
+
+        emit TradeAcknowledged(tradeId);
+    }
+
+    /// @notice Claim funds after dispute window has passed with no proof submitted
+    /// @param tradeId The trade to claim funds for
+    function claimAfterWindow(uint256 tradeId) external {
+        Trade storage trade = trades[tradeId];
+        require(trade.status == TradeStatus.Acknowledged, "Not acknowledged");
+        require(trade.seller == msg.sender, "Not seller");
+        require(
+            block.timestamp >= trade.acknowledgedAt + DISPUTE_WINDOW,
             "Window not passed"
         );
 
-        listing.status = ListingStatus.Completed;
-        usdc.transfer(listing.seller, listing.price);
+        trade.status = TradeStatus.Completed;
+        usdc.transfer(trade.seller, trade.price);
 
-        emit FundsReleased(listingId, listing.seller);
-    }
-
-    // =============================================================
-    //                       BUYER FUNCTIONS
-    // =============================================================
-
-    /// @notice Purchase a game listing
-    /// @param listingId The listing to purchase
-    /// @param steamUsername Buyer's Steam username
-    function purchase(
-        uint256 listingId,
-        string calldata steamUsername
-    ) external {
-        Listing storage listing = listings[listingId];
-        require(listing.status == ListingStatus.Open, "Not available");
-        require(listing.seller != msg.sender, "Cannot buy own listing");
-
-        listing.status = ListingStatus.Purchased;
-        listing.buyer = msg.sender;
-        listing.buyerSteamUsername = steamUsername;
-
-        usdc.transferFrom(msg.sender, address(this), listing.price);
-
-        emit GamePurchased(listingId, msg.sender, steamUsername);
+        emit FundsReleased(tradeId, trade.seller);
     }
 
     // =============================================================
     //                      VERIFIER FUNCTIONS
     // =============================================================
 
-    /// @notice Submit zkTLS proof result for a listing
-    /// @param listingId The listing to resolve
+    /// @notice Submit zkTLS proof result for a trade
+    /// @param tradeId The trade to resolve
     /// @param buyerOwnsGame True if buyer owns the game, false otherwise
-    function submitProofResult(uint256 listingId, bool buyerOwnsGame) external {
+    function submitProofResult(uint256 tradeId, bool buyerOwnsGame) external {
         require(msg.sender == verifier, "Not verifier");
 
-        Listing storage listing = listings[listingId];
-        require(listing.status == ListingStatus.Acknowledged, "Not acknowledged");
+        Trade storage trade = trades[tradeId];
+        require(trade.status == TradeStatus.Acknowledged, "Not acknowledged");
 
         if (buyerOwnsGame) {
-            // Buyer received the game - release funds to seller
-            listing.status = ListingStatus.Completed;
-            usdc.transfer(listing.seller, listing.price);
-            emit FundsReleased(listingId, listing.seller);
+            // Buyer received the game — release funds to seller
+            trade.status = TradeStatus.Completed;
+            usdc.transfer(trade.seller, trade.price);
+            emit FundsReleased(tradeId, trade.seller);
         } else {
-            // Buyer doesn't have game - refund buyer
-            listing.status = ListingStatus.Refunded;
-            usdc.transfer(listing.buyer, listing.price);
-            emit FundsRefunded(listingId, listing.buyer);
+            // Buyer doesn't have game — refund buyer
+            trade.status = TradeStatus.Refunded;
+            usdc.transfer(trade.buyer, trade.price);
+            emit FundsRefunded(tradeId, trade.buyer);
         }
     }
 
@@ -209,12 +215,17 @@ contract SteamGameEscrow {
     //                       VIEW FUNCTIONS
     // =============================================================
 
-    /// @notice Get full listing details
-    /// @param listingId The listing ID
-    /// @return The listing struct
-    function getListing(
-        uint256 listingId
-    ) external view returns (Listing memory) {
-        return listings[listingId];
+    /// @notice Get full trade details
+    /// @param tradeId The trade ID
+    /// @return The trade struct
+    function getTrade(uint256 tradeId) external view returns (Trade memory) {
+        return trades[tradeId];
+    }
+
+    /// @notice Get the acknowledged timestamp for a trade (used by verifier for timestamp binding)
+    /// @param tradeId The trade ID
+    /// @return The timestamp when the seller acknowledged the trade
+    function getAcknowledgedAt(uint256 tradeId) external view returns (uint256) {
+        return trades[tradeId].acknowledgedAt;
     }
 }
