@@ -3,6 +3,8 @@ mod types;
 use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use clap::Parser;
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::process::ExitCode;
 use tlsn_core::{
     presentation::{Presentation, PresentationOutput},
@@ -23,6 +25,22 @@ struct Args {
     /// Show detailed output
     #[arg(short, long, default_value = "false")]
     verbose: bool,
+
+    /// Output as JSON (matches Solidity VerificationResult struct)
+    #[arg(short, long, default_value = "false")]
+    json: bool,
+}
+
+/// Verification result matching Solidity's VerificationResult struct
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VerificationResult {
+    /// Whether the user owns the game
+    owns_game: bool,
+    /// Unix timestamp of the TLS connection
+    timestamp: u64,
+    /// SHA256 hash of the revealed transcript data
+    transcript_hash: String,
 }
 
 #[tokio::main]
@@ -30,25 +48,33 @@ async fn main() -> ExitCode {
     let args = Args::parse();
 
     match verify(&args).await {
-        Ok(true) => {
-            println!("yes");
-            ExitCode::SUCCESS
-        }
-        Ok(false) => {
-            println!("no");
-            ExitCode::from(1)
+        Ok(result) => {
+            if args.json {
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+            } else {
+                println!("{}", if result.owns_game { "yes" } else { "no" });
+            }
+            if result.owns_game {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::from(1)
+            }
         }
         Err(e) => {
             if args.verbose {
                 eprintln!("error: {}", e);
             }
-            println!("no");
+            if args.json {
+                eprintln!("{{\"error\": \"{}\"}}", e);
+            } else {
+                println!("no");
+            }
             ExitCode::from(1)
         }
     }
 }
 
-async fn verify(args: &Args) -> Result<bool> {
+async fn verify(args: &Args) -> Result<VerificationResult> {
     // Load the presentation
     let presentation: Presentation = bincode::deserialize(
         &tokio::fs::read(&args.presentation).await?
@@ -73,8 +99,9 @@ async fn verify(args: &Args) -> Result<bool> {
         ..
     } = presentation.verify(&provider)?;
 
-    // Extract connection time
-    let connection_time = DateTime::<Utc>::from_timestamp(connection_info.time as i64, 0)
+    // Extract timestamp
+    let timestamp = connection_info.time;
+    let connection_time = DateTime::<Utc>::from_timestamp(timestamp as i64, 0)
         .ok_or_else(|| anyhow!("Invalid timestamp"))?;
 
     let server_name = server_name.ok_or_else(|| anyhow!("No server name in proof"))?;
@@ -84,14 +111,20 @@ async fn verify(args: &Args) -> Result<bool> {
         if args.verbose {
             eprintln!("Invalid server: {}", server_name.as_str());
         }
-        return Ok(false);
+        return Err(anyhow!("Invalid server: {}", server_name.as_str()));
     }
 
     // Get transcript data
     let mut partial_transcript = transcript.ok_or_else(|| anyhow!("No transcript in proof"))?;
     partial_transcript.set_unauthed(b'X');
 
-    let recv = String::from_utf8_lossy(partial_transcript.received_unsafe());
+    let transcript_bytes = partial_transcript.received_unsafe();
+    let recv = String::from_utf8_lossy(transcript_bytes);
+
+    // Compute transcript hash (matches Solidity)
+    let mut hasher = Sha256::new();
+    hasher.update(transcript_bytes);
+    let transcript_hash: [u8; 32] = hasher.finalize().into();
 
     // Check for game_count in revealed data
     let owns_game = recv.contains("\"game_count\":1");
@@ -99,17 +132,19 @@ async fn verify(args: &Args) -> Result<bool> {
 
     if args.verbose {
         eprintln!("server: {}", server_name.as_str());
-        eprintln!("timestamp: {} UTC", connection_time.format("%Y-%m-%d %H:%M:%S"));
+        eprintln!("timestamp: {} ({})", timestamp, connection_time.format("%Y-%m-%d %H:%M:%S UTC"));
         eprintln!("app_id: {}", args.app_id);
-        eprintln!("revealed: {}", if owns_game { "game_count:1" } else if doesnt_own { "game_count:0" } else { "unknown" });
+        eprintln!("owns_game: {}", owns_game);
+        eprintln!("transcript_hash: 0x{}", hex::encode(&transcript_hash));
     }
 
     if !owns_game && !doesnt_own {
-        if args.verbose {
-            eprintln!("No valid game_count found in revealed data");
-        }
         return Err(anyhow!("Invalid proof - no game_count revealed"));
     }
 
-    Ok(owns_game)
+    Ok(VerificationResult {
+        owns_game,
+        timestamp,
+        transcript_hash: format!("0x{}", hex::encode(&transcript_hash)),
+    })
 }

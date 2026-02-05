@@ -1,0 +1,6 @@
+[submodule "steam-zktls/lib/openzeppelin-contracts"]
+	path = steam-zktls/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "steam-zktls/lib/forge-std"]
+	path = steam-zktls/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std

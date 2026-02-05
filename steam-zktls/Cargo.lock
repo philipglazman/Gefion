@@ -3689,6 +3689,7 @@ name = "steam-zktls"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "bincode",
  "chrono",
  "clap 4.5.57",
@@ -3698,10 +3699,13 @@ dependencies = [
  "http-body-util",
  "hyper 1.8.1",
  "hyper-util",
+ "k256",
  "notary-client",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
+ "tiny-keccak",
  "tlsn-common",
  "tlsn-core",
  "tlsn-formats",
