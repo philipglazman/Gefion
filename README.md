@@ -1,4 +1,4 @@
-# Forage
+# Gefion
 
 A trustless Steam game marketplace using USDC on Monad with zkTLS proofs for game ownership verification.
 
@@ -203,7 +203,7 @@ cast send 0x5FbDB2315678afecb367f032d93F642f64180aa3 "mint(address,uint256)" <AD
 
 ## Monad Testnet Deployment
 
-Deploy and run Forage on Monad Testnet instead of local Anvil.
+Deploy and run Gefion on Monad Testnet instead of local Anvil.
 
 ### Network Details
 

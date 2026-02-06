@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide walks through deploying Forage with your own notary signing key, from key generation through contract deployment and backend configuration.
+This guide walks through deploying Gefion with your own notary signing key, from key generation through contract deployment and backend configuration.
 
 ## Prerequisites
 
