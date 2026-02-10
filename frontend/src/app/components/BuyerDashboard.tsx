@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Listing } from '../types';
-import { ShoppingBag, AlertCircle, Clock, CheckCircle, Shield, History } from 'lucide-react';
+import { ShoppingBag, AlertCircle, Clock, CheckCircle, Shield, History, ExternalLink } from 'lucide-react';
+import { getAddressExplorerUrl } from '../config';
 import { toast } from 'sonner';
 import api from '../services/api';
 import { TransactionHistory } from './TransactionHistory';
@@ -161,9 +162,21 @@ function PurchaseCard({
               <div className="grid grid-cols-4 gap-3 text-xs mb-2">
                 <div>
                   <div className="text-gray-500 mb-0.5">Seller</div>
-                  <div className="text-white font-mono text-[10px]">
-                    {listing.seller.slice(0, 6)}...{listing.seller.slice(-4)}
-                  </div>
+                  {getAddressExplorerUrl(listing.seller) ? (
+                    <a
+                      href={getAddressExplorerUrl(listing.seller)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0074e4] hover:text-[#0066cc] font-mono text-[10px] inline-flex items-center gap-1 transition-colors"
+                    >
+                      {listing.seller.slice(0, 6)}...{listing.seller.slice(-4)}
+                      <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                  ) : (
+                    <div className="text-white font-mono text-[10px]">
+                      {listing.seller.slice(0, 6)}...{listing.seller.slice(-4)}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-gray-500 mb-0.5">Steam User</div>

@@ -1,8 +1,17 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { useApp } from '../context/AppContext';
-import { ArrowLeft, Shield, Clock, CheckCircle } from 'lucide-react';
+import { getAddressExplorerUrl } from '../config';
+import { ArrowLeft, Shield, Clock, CheckCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from './ui/dialog';
 
 export function GameDetails() {
   const { id } = useParams();
@@ -10,6 +19,8 @@ export function GameDetails() {
   const { games, wallet, purchase, connectWallet } = useApp();
   const [steamUsername, setSteamUsername] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [wizardStep, setWizardStep] = useState<1 | 2>(1);
 
   const game = games.find((g) => g.id === id);
 
@@ -26,7 +37,7 @@ export function GameDetails() {
     );
   }
 
-  const handlePurchase = async () => {
+  const openPurchaseModal = async () => {
     if (!wallet.connected) {
       try {
         await connectWallet();
@@ -35,7 +46,11 @@ export function GameDetails() {
         return;
       }
     }
+    setWizardStep(1);
+    setShowPurchaseModal(true);
+  };
 
+  const handlePurchase = async () => {
     if (!steamUsername.trim()) {
       toast.error('Please enter your Steam username');
       return;
@@ -55,6 +70,7 @@ export function GameDetails() {
 
     try {
       await purchase(game.steamAppId, game.sellerAddress, steamUsername, game.price, game.listingId);
+      setShowPurchaseModal(false);
       toast.success('Purchase initiated! Funds deposited to escrow.');
       navigate('/buyer');
     } catch (e) {
@@ -100,6 +116,14 @@ export function GameDetails() {
             </div>
 
             <h1 className="text-xl font-bold text-white mb-2">{game.title}</h1>
+            <a
+              href={`https://store.steampowered.com/app/${game.steamAppId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-[#0074e4] hover:text-[#0066cc] text-xs mb-3 transition-colors"
+            >
+              View on Steam <ExternalLink className="w-3 h-3" />
+            </a>
             <p className="text-gray-400 text-sm leading-relaxed mb-6">{game.description}</p>
 
             {/* Game Details */}
@@ -110,15 +134,20 @@ export function GameDetails() {
                   <div className="text-gray-500 mb-0.5">Steam App ID</div>
                   <div className="text-white">{game.steamAppId}</div>
                 </div>
-                <div>
-                  <div className="text-gray-500 mb-0.5">Seller</div>
-                  <div className="text-white">{game.seller}</div>
-                </div>
                 <div className="col-span-2">
-                  <div className="text-gray-500 mb-0.5">Seller Address</div>
-                  <div className="text-white font-mono text-[10px]">
-                    {game.sellerAddress}
-                  </div>
+                  <div className="text-gray-500 mb-0.5">Seller</div>
+                  {getAddressExplorerUrl(game.sellerAddress) ? (
+                    <a
+                      href={getAddressExplorerUrl(game.sellerAddress)!}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0074e4] hover:text-[#0066cc] font-mono text-[10px] inline-flex items-center gap-1 transition-colors"
+                    >
+                      {game.sellerAddress} <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <div className="text-white font-mono text-[10px]">{game.sellerAddress}</div>
+                  )}
                 </div>
               </div>
             </div>
@@ -131,32 +160,11 @@ export function GameDetails() {
                 <div className="text-gray-400 text-xs mb-1">Price</div>
                 <div className="text-2xl font-bold text-white mb-4">${game.price}</div>
 
-                <div className="space-y-3 mb-4">
-                  <div>
-                    <label htmlFor="steam-username" className="block text-xs text-gray-400 mb-1.5">
-                      Your Steam Username
-                    </label>
-                    <input
-                      type="text"
-                      id="steam-username"
-                      value={steamUsername}
-                      onChange={(e) => setSteamUsername(e.target.value)}
-                      placeholder="Enter Steam username"
-                      className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4] focus:border-transparent transition-all"
-                    />
-                  </div>
-                </div>
-
                 <button
-                  onClick={handlePurchase}
-                  disabled={isProcessing}
-                  className="w-full py-2.5 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={openPurchaseModal}
+                  className="w-full py-2.5 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200"
                 >
-                  {isProcessing
-                    ? 'Processing...'
-                    : wallet.connected
-                    ? 'Buy Now'
-                    : 'Sign In & Buy'}
+                  {wallet.connected ? 'Buy Now' : 'Sign In & Buy'}
                 </button>
 
                 {wallet.connected && (
@@ -194,6 +202,102 @@ export function GameDetails() {
           </div>
         </div>
       </div>
+
+      {/* Purchase Wizard Modal */}
+      <Dialog open={showPurchaseModal} onOpenChange={(open) => {
+        if (!open) {
+          setShowPurchaseModal(false);
+        }
+      }}>
+        <DialogContent className="bg-[#1a1a1a] border-white/10 text-white sm:max-w-md">
+          {wizardStep === 1 ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-white">Enter Your Steam Username</DialogTitle>
+                <DialogDescription className="text-gray-400">
+                  We need your Steam username to verify game delivery using zkTLS. After the seller
+                  gifts you the game, we cryptographically prove you own it to release funds from
+                  escrow.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div>
+                <label htmlFor="steam-username" className="block text-xs text-gray-400 mb-1.5">
+                  Steam Username
+                </label>
+                <input
+                  type="text"
+                  id="steam-username"
+                  value={steamUsername}
+                  onChange={(e) => setSteamUsername(e.target.value)}
+                  placeholder="Enter your Steam username"
+                  className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4] focus:border-transparent transition-all"
+                />
+              </div>
+
+              <DialogFooter>
+                <button
+                  onClick={() => setShowPurchaseModal(false)}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => setWizardStep(2)}
+                  disabled={!steamUsername.trim()}
+                  className="px-4 py-2 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Continue
+                </button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-white">Confirm Purchase</DialogTitle>
+              </DialogHeader>
+
+              <div className="space-y-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Game</span>
+                  <span className="text-white font-medium">{game.title}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Price</span>
+                  <span className="text-white font-medium">${game.price}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Seller</span>
+                  <span className="text-white font-mono text-xs">
+                    {game.sellerAddress.slice(0, 6)}...{game.sellerAddress.slice(-4)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Steam Username</span>
+                  <span className="text-white font-medium">{steamUsername}</span>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <button
+                  onClick={() => setWizardStep(1)}
+                  disabled={isProcessing}
+                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-50"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handlePurchase}
+                  disabled={isProcessing}
+                  className="px-4 py-2 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isProcessing ? 'Processing...' : 'Confirm Purchase'}
+                </button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
