@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Outlet, Link, useLocation } from 'react-router';
-import { Wallet, ShoppingBag, Store, Gamepad2 } from 'lucide-react';
+import { Wallet, ShoppingBag, Store, Gamepad2, Info } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { toast } from 'sonner';
 
@@ -43,7 +43,7 @@ export function RootLayout() {
                 <Link
                   to="/"
                   className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 ${
-                    isActive('/') && !isActive('/buyer') && !isActive('/seller')
+                    isActive('/') && !isActive('/buyer') && !isActive('/seller') && !isActive('/about')
                       ? 'bg-white/10 text-white'
                       : 'text-gray-400 hover:text-white hover:bg-white/5'
                   }`}
@@ -71,6 +71,17 @@ export function RootLayout() {
                 >
                   <Store className="w-3.5 h-3.5" />
                   Sell
+                </Link>
+                <Link
+                  to="/about"
+                  className={`px-3 py-1.5 rounded text-xs font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                    isActive('/about')
+                      ? 'bg-white/10 text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <Info className="w-3.5 h-3.5" />
+                  About
                 </Link>
               </div>
             </div>
