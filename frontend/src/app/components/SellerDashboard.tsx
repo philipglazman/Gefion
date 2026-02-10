@@ -99,7 +99,15 @@ export function SellerDashboard() {
   const handleCreateListing = async (e: React.FormEvent) => {
     e.preventDefault();
     const price = parseFloat(newPrice);
-    const steamAppId = parseInt(newSteamAppId);
+
+    // Parse Steam App ID from raw ID or Steam store URL
+    let steamAppId: number;
+    const urlMatch = newSteamAppId.match(/store\.steampowered\.com\/app\/(\d+)/);
+    if (urlMatch) {
+      steamAppId = parseInt(urlMatch[1]);
+    } else {
+      steamAppId = parseInt(newSteamAppId);
+    }
 
     if (isNaN(price) || price <= 0) {
       toast.error('Enter a valid price');
@@ -107,7 +115,7 @@ export function SellerDashboard() {
     }
 
     if (isNaN(steamAppId) || steamAppId <= 0) {
-      toast.error('Enter a valid Steam App ID');
+      toast.error('Enter a valid Steam App ID or URL');
       return;
     }
 
@@ -195,12 +203,12 @@ export function SellerDashboard() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Steam App ID</label>
+                  <label className="block text-xs text-gray-400 mb-1">Steam App ID or URL</label>
                   <input
-                    type="number"
+                    type="text"
                     value={newSteamAppId}
                     onChange={(e) => setNewSteamAppId(e.target.value)}
-                    placeholder="730"
+                    placeholder="550 or https://store.steampowered.com/app/550/Left_4_Dead_2"
                     className="w-full px-3 py-2 bg-[#2a2a2a] border border-white/10 rounded text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#0074e4]"
                   />
                 </div>

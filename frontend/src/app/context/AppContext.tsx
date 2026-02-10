@@ -89,16 +89,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     fetchConfig().then(() => setConfigLoaded(true));
   }, []);
 
-  // Bridge Privy wallet to BlockchainService when wallet connects
+  // Bridge Privy wallet to BlockchainService when wallet connects and config is loaded
   useEffect(() => {
     async function initWallet() {
-      if (!ready || !authenticated || wallets.length === 0) return;
+      if (!ready || !authenticated || wallets.length === 0 || !configLoaded) return;
 
       const privyWallet = wallets[0];
       try {
         const ethProvider = await privyWallet.getEthereumProvider();
         const address = await blockchain.connectWithProvider(ethProvider);
-        const balance = await blockchain.getBalance(address);
+        let balance = 0;
+        try {
+          balance = await blockchain.getBalance(address);
+        } catch (e) {
+          console.warn('Could not fetch balance (contract may not be deployed on this chain):', e);
+        }
         setWallet({ connected: true, address, balance });
       } catch (e) {
         console.error('Failed to initialize wallet from Privy:', e);
@@ -106,7 +111,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     initWallet();
-  }, [ready, authenticated, wallets]);
+  }, [ready, authenticated, wallets, configLoaded]);
 
   // Clear state when Privy logs out
   useEffect(() => {
@@ -173,6 +178,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [wallet.connected, refreshMyListings, refreshBalance]);
 
   const connectWallet = async () => {
+    if (authenticated) return;
     setIsLoading(true);
     try {
       login();
