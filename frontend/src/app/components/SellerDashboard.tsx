@@ -56,6 +56,7 @@ export function SellerDashboard() {
 
   useEffect(() => {
     fetchOffChainListings();
+    refreshMyListings();
   }, [wallet.connected, wallet.address]);
 
   const handleAcknowledge = async (tradeId: number) => {

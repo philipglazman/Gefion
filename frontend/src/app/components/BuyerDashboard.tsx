@@ -12,6 +12,11 @@ export function BuyerDashboard() {
   const [confirmingId, setConfirmingId] = useState<number | null>(null);
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
 
+  // Refresh on mount (page navigation)
+  useEffect(() => {
+    refreshMyListings();
+  }, [refreshMyListings]);
+
   const handleConfirmReceipt = async (tradeId: number) => {
     setConfirmingId(tradeId);
     try {

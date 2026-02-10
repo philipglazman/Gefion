@@ -4,8 +4,13 @@ import { useApp } from '../context/AppContext';
 import { Gamepad2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 export function Marketplace() {
-  const { games } = useApp();
+  const { games, refreshListings } = useApp();
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Refresh listings on mount (page navigation)
+  useEffect(() => {
+    refreshListings();
+  }, [refreshListings]);
 
   // Auto-advance carousel
   useEffect(() => {
