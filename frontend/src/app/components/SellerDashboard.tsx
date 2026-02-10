@@ -20,7 +20,7 @@ interface OffChainListing {
 }
 
 export function SellerDashboard() {
-  const { myListings, wallet, acknowledge, claimAfterWindow, refreshMyListings } = useApp();
+  const { myListings, wallet, acknowledge, claimAfterWindow, cancelTrade, refreshMyListings } = useApp();
   const [provingId, setProvingId] = useState<number | null>(null);
   const [selectedTrade, setSelectedTrade] = useState<Listing | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -58,6 +58,17 @@ export function SellerDashboard() {
     fetchOffChainListings();
     refreshMyListings();
   }, [wallet.connected, wallet.address]);
+
+  const handleCancelTrade = async (tradeId: number) => {
+    try {
+      await cancelTrade(tradeId);
+      toast.success('Trade cancelled. Funds returned to buyer.');
+      await refreshMyListings();
+    } catch (e) {
+      console.error('Cancel failed:', e);
+      toast.error('Failed to cancel trade');
+    }
+  };
 
   const handleAcknowledge = async (tradeId: number) => {
     try {
@@ -346,12 +357,20 @@ export function SellerDashboard() {
                             History
                           </button>
                           {trade.status === 'Pending' && (
-                            <button
-                              onClick={() => handleAcknowledge(trade.id)}
-                              className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all text-xs"
-                            >
-                              Acknowledge
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleAcknowledge(trade.id)}
+                                className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all text-xs"
+                              >
+                                Acknowledge
+                              </button>
+                              <button
+                                onClick={() => handleCancelTrade(trade.id)}
+                                className="px-2.5 py-1 bg-[#ff4444] text-white rounded hover:bg-[#cc3333] transition-all text-xs"
+                              >
+                                Cancel
+                              </button>
+                            </>
                           )}
                           {trade.status === 'Acknowledged' && (
                             <>

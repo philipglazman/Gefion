@@ -111,12 +111,12 @@ contract SteamGameEscrow {
         emit TradeCreated(tradeId, msg.sender, seller, amount, steamAppId, steamUsername);
     }
 
-    /// @notice Cancel a trade before the seller acknowledges
+    /// @notice Cancel a trade before the seller acknowledges — either party can cancel
     /// @param tradeId The trade to cancel
     function cancelTrade(uint256 tradeId) external {
         Trade storage trade = trades[tradeId];
         require(trade.status == TradeStatus.Pending, "Not pending");
-        require(trade.buyer == msg.sender, "Not buyer");
+        require(trade.buyer == msg.sender || trade.seller == msg.sender, "Not buyer or seller");
 
         trade.status = TradeStatus.Cancelled;
         usdc.transfer(trade.buyer, trade.price);
