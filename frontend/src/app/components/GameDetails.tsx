@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { getAddressExplorerUrl } from '../config';
 import { ArrowLeft, Shield, Clock, CheckCircle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
+import api from '../services/api';
 import {
   Dialog,
   DialogContent,
@@ -21,6 +22,7 @@ export function GameDetails() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [wizardStep, setWizardStep] = useState<1 | 2>(1);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(false);
 
   const game = games.find((g) => g.id === id);
 
@@ -243,11 +245,29 @@ export function GameDetails() {
                   Cancel
                 </button>
                 <button
-                  onClick={() => setWizardStep(2)}
-                  disabled={!steamUsername.trim()}
+                  onClick={async () => {
+                    setIsCheckingProfile(true);
+                    try {
+                      const result = await api.checkSteamProfileVisibility(steamUsername.trim());
+                      if (!result.found) {
+                        toast.error('Steam user not found. Please check your username and try again.');
+                        return;
+                      }
+                      if (!result.public) {
+                        toast.error('Your Steam profile is not public. Please set your profile to public in Steam privacy settings so we can verify game delivery.');
+                        return;
+                      }
+                      setWizardStep(2);
+                    } catch {
+                      toast.error('Failed to verify Steam profile. Please try again.');
+                    } finally {
+                      setIsCheckingProfile(false);
+                    }
+                  }}
+                  disabled={!steamUsername.trim() || isCheckingProfile}
                   className="px-4 py-2 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Continue
+                  {isCheckingProfile ? 'Checking...' : 'Continue'}
                 </button>
               </DialogFooter>
             </>

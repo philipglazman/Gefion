@@ -1,6 +1,7 @@
 import { RouterProvider } from 'react-router';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { defineChain } from 'viem';
+import { Toaster } from 'sonner';
 import { router } from './routes';
 import { AppProvider } from './context/AppContext';
 
@@ -48,6 +49,7 @@ export default function App() {
     >
       <AppProvider>
         <RouterProvider router={router} />
+        <Toaster theme="dark" position="bottom-right" toastOptions={{ style: { zIndex: 9999 } }} />
       </AppProvider>
     </PrivyProvider>
   );
