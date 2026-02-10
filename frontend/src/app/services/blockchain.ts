@@ -25,76 +25,27 @@ const USDC_ABI = [
   'function allowance(address owner, address spender) external view returns (uint256)',
 ];
 
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider;
-  }
-}
-
 export class BlockchainService {
   private provider: BrowserProvider | null = null;
   private escrow: Contract | null = null;
   private usdc: Contract | null = null;
 
-  async connect(): Promise<string> {
-    if (!window.ethereum) {
-      throw new Error('MetaMask not installed');
-    }
-
-    this.provider = new BrowserProvider(window.ethereum);
-
-    // Request account access
-    const accounts = await this.provider.send('eth_requestAccounts', []);
-    if (accounts.length === 0) {
-      throw new Error('No accounts found');
-    }
-
-    // Chain configurations for wallet_addEthereumChain
-    const chainConfigs: Record<number, { name: string; symbol: string; rpcUrl: string; explorerUrl?: string }> = {
-      31337: { name: 'Anvil Local', symbol: 'ETH', rpcUrl: 'http://localhost:8545' },
-      10143: { name: 'Monad Testnet', symbol: 'MON', rpcUrl: 'https://testnet-rpc.monad.xyz', explorerUrl: 'https://testnet.monadexplorer.com' },
-    };
-
-    // Check/switch chain
-    const network = await this.provider.getNetwork();
-    if (Number(network.chainId) !== config.chainId) {
-      try {
-        await window.ethereum.request({
-          method: 'wallet_switchEthereumChain',
-          params: [{ chainId: `0x${config.chainId.toString(16)}` }],
-        });
-      } catch (e: unknown) {
-        // Chain not added, try to add it
-        if ((e as { code?: number }).code === 4902) {
-          const chainConfig = chainConfigs[config.chainId] || { name: 'Unknown', symbol: 'ETH', rpcUrl: config.rpcUrl };
-          const addChainParams: Record<string, unknown> = {
-            chainId: `0x${config.chainId.toString(16)}`,
-            chainName: chainConfig.name,
-            rpcUrls: [chainConfig.rpcUrl],
-            nativeCurrency: { name: chainConfig.symbol, symbol: chainConfig.symbol, decimals: 18 },
-          };
-          if (chainConfig.explorerUrl) {
-            addChainParams.blockExplorerUrls = [chainConfig.explorerUrl];
-          }
-          await window.ethereum.request({
-            method: 'wallet_addEthereumChain',
-            params: [addChainParams],
-          });
-        } else {
-          throw e;
-        }
-      }
-      // Refresh provider after chain switch
-      this.provider = new BrowserProvider(window.ethereum);
-    }
-
+  async connectWithProvider(eip1193Provider: Eip1193Provider): Promise<string> {
+    this.provider = new BrowserProvider(eip1193Provider);
     const signer = await this.provider.getSigner();
+    const address = await signer.getAddress();
 
     // Initialize contracts
     this.escrow = new Contract(config.escrowAddress, ESCROW_ABI, signer);
     this.usdc = new Contract(config.usdcAddress, USDC_ABI, signer);
 
-    return accounts[0];
+    return address;
+  }
+
+  disconnect() {
+    this.provider = null;
+    this.escrow = null;
+    this.usdc = null;
   }
 
   async getBalance(address: string): Promise<number> {

@@ -42,7 +42,7 @@ export function GameDetails() {
     }
 
     if (wallet.balance < game.price) {
-      toast.error('Insufficient USDC balance');
+      toast.error('Insufficient balance');
       return;
     }
 
@@ -129,7 +129,7 @@ export function GameDetails() {
             <div className="bg-[#1a1a1a] rounded overflow-hidden">
               <div className="p-4">
                 <div className="text-gray-400 text-xs mb-1">Price</div>
-                <div className="text-2xl font-bold text-white mb-4">{game.price} USDC</div>
+                <div className="text-2xl font-bold text-white mb-4">${game.price}</div>
 
                 <div className="space-y-3 mb-4">
                   <div>
@@ -156,12 +156,12 @@ export function GameDetails() {
                     ? 'Processing...'
                     : wallet.connected
                     ? 'Buy Now'
-                    : 'Connect Wallet & Buy'}
+                    : 'Sign In & Buy'}
                 </button>
 
                 {wallet.connected && (
                   <p className="text-center text-gray-500 text-xs mt-2">
-                    Balance: {wallet.balance.toFixed(2)} USDC
+                    Balance: ${wallet.balance.toFixed(2)}
                   </p>
                 )}
               </div>

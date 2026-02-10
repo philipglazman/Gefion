@@ -78,7 +78,7 @@ export function RootLayout() {
               {wallet.connected ? (
                 <div className="flex items-center gap-3">
                   <div className="text-right">
-                    <div className="text-xs font-medium text-white">{wallet.balance.toFixed(2)} USDC</div>
+                    <div className="text-xs font-medium text-white">${wallet.balance.toFixed(2)}</div>
                     <div className="text-[10px] text-gray-500">
                       {wallet.address.slice(0, 6)}...{wallet.address.slice(-4)}
                     </div>
@@ -87,7 +87,7 @@ export function RootLayout() {
                     onClick={disconnectWallet}
                     className="px-3 py-1.5 bg-white/10 text-white text-xs font-medium rounded hover:bg-white/20 transition-all duration-200"
                   >
-                    Disconnect
+                    Sign Out
                   </button>
                 </div>
               ) : (
@@ -97,7 +97,7 @@ export function RootLayout() {
                   className="px-4 py-1.5 bg-[#0074e4] text-white text-xs font-medium rounded hover:bg-[#0066cc] transition-all duration-200 flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Wallet className="w-3.5 h-3.5" />
-                  {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                  {isConnecting ? 'Signing in...' : 'Sign In'}
                 </button>
               )}
             </div>

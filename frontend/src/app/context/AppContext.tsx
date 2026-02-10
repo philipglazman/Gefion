@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { usePrivy, useWallets } from '@privy-io/react-auth';
 import { WalletState, Listing, Game, SteamGame } from '../types';
 import { blockchain } from '../services/blockchain';
 import api from '../services/api';
@@ -67,6 +68,9 @@ async function enrichListingsWithSteamData(listings: Listing[]): Promise<Listing
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const { login, logout, authenticated, ready } = usePrivy();
+  const { wallets } = useWallets();
+
   const [wallet, setWallet] = useState<WalletState>({
     connected: false,
     address: '',
@@ -84,6 +88,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchConfig().then(() => setConfigLoaded(true));
   }, []);
+
+  // Bridge Privy wallet to BlockchainService when wallet connects
+  useEffect(() => {
+    async function initWallet() {
+      if (!ready || !authenticated || wallets.length === 0) return;
+
+      const privyWallet = wallets[0];
+      try {
+        const ethProvider = await privyWallet.getEthereumProvider();
+        const address = await blockchain.connectWithProvider(ethProvider);
+        const balance = await blockchain.getBalance(address);
+        setWallet({ connected: true, address, balance });
+      } catch (e) {
+        console.error('Failed to initialize wallet from Privy:', e);
+      }
+    }
+
+    initWallet();
+  }, [ready, authenticated, wallets]);
+
+  // Clear state when Privy logs out
+  useEffect(() => {
+    if (ready && !authenticated) {
+      blockchain.disconnect();
+      setWallet({ connected: false, address: '', balance: 0 });
+      setMyListings({ selling: [], buying: [] });
+    }
+  }, [ready, authenticated]);
 
   const refreshBalance = useCallback(async () => {
     if (!wallet.connected || !wallet.address) return;
@@ -143,13 +175,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const connectWallet = async () => {
     setIsLoading(true);
     try {
-      const address = await blockchain.connect();
-      const balance = await blockchain.getBalance(address);
-      setWallet({
-        connected: true,
-        address,
-        balance,
-      });
+      login();
     } catch (e) {
       console.error('Failed to connect wallet:', e);
       throw e;
@@ -159,12 +185,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const disconnectWallet = () => {
-    setWallet({
-      connected: false,
-      address: '',
-      balance: 0,
-    });
-    setMyListings({ selling: [], buying: [] });
+    logout();
   };
 
   const purchase = async (steamAppId: number, seller: string, steamUsername: string, price: number, listingId?: number) => {

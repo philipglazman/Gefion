@@ -143,8 +143,8 @@ export function SellerDashboard() {
       <div className="min-h-screen bg-[#121212] flex items-center justify-center">
         <div className="bg-[#1a1a1a] border border-white/10 rounded p-6 text-center max-w-sm">
           <AlertCircle className="w-10 h-10 text-[#ffaa00] mx-auto mb-3" />
-          <h2 className="text-base font-semibold text-white mb-1">Wallet Not Connected</h2>
-          <p className="text-gray-400 text-sm">Connect wallet to access dashboard</p>
+          <h2 className="text-base font-semibold text-white mb-1">Please Sign In</h2>
+          <p className="text-gray-400 text-sm">Sign in to access your dashboard</p>
         </div>
       </div>
     );
@@ -184,7 +184,7 @@ export function SellerDashboard() {
             <form onSubmit={handleCreateListing} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Price (USDC)</label>
+                  <label className="block text-xs text-gray-400 mb-1">Price ($)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -250,7 +250,7 @@ export function SellerDashboard() {
                     <h3 className="text-xs font-medium text-white mb-0.5 truncate">
                       {listing.title || `Game #${listing.steamAppId}`}
                     </h3>
-                    <div className="text-sm font-bold text-[#0074e4] mb-2">{listing.price} USDC</div>
+                    <div className="text-sm font-bold text-[#0074e4] mb-2">${listing.price}</div>
                     <div className="flex items-center justify-between">
                       <span className="text-[10px] text-gray-500">#{listing.steamAppId}</span>
                       <button
@@ -298,7 +298,7 @@ export function SellerDashboard() {
                           <div className="grid grid-cols-4 gap-3 text-xs">
                             <div>
                               <div className="text-gray-500 mb-0.5">Price</div>
-                              <div className="text-[#0074e4] font-bold">{trade.price} USDC</div>
+                              <div className="text-[#0074e4] font-bold">${trade.price}</div>
                             </div>
                             <div>
                               <div className="text-gray-500 mb-0.5">App ID</div>

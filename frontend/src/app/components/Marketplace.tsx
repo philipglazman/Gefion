@@ -65,7 +65,7 @@ export function Marketplace() {
                   to={`/game/${currentGame.id}`}
                   className="px-5 py-2 bg-[#0074e4] text-white text-sm font-medium rounded hover:bg-[#0066cc] transition-all duration-200"
                 >
-                  Buy Now - {currentGame.price} USDC
+                  Buy Now - ${currentGame.price}
                 </Link>
                 <Link
                   to={`/game/${currentGame.id}`}
@@ -167,7 +167,7 @@ export function Marketplace() {
                     {game.title}
                   </h3>
                   <p className="text-[10px] text-gray-500 mb-1.5 truncate">{game.seller}</p>
-                  <span className="text-white text-sm font-bold">{game.price} USDC</span>
+                  <span className="text-white text-sm font-bold">${game.price}</span>
                 </div>
               </Link>
             ))}

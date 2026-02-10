@@ -52,7 +52,7 @@ export function TransactionHistory({ tradeId, title, onClose }: TransactionHisto
           <div className="text-[10px] text-gray-400 space-y-0.5">
             <div>Buyer: <span className="text-white font-mono">{formatAddress(args.buyer as string)}</span></div>
             <div>Seller: <span className="text-white font-mono">{formatAddress(args.seller as string)}</span></div>
-            <div>Price: <span className="text-[#0074e4]">{args.price as string} USDC</span></div>
+            <div>Price: <span className="text-[#0074e4]">${args.price as string}</span></div>
           </div>
         );
       case 'TradeAcknowledged':

@@ -51,8 +51,8 @@ export function BuyerDashboard() {
       <div className="min-h-screen bg-[#121212] flex items-center justify-center">
         <div className="bg-[#1a1a1a] border border-white/10 rounded p-6 text-center max-w-sm">
           <AlertCircle className="w-10 h-10 text-[#ffaa00] mx-auto mb-3" />
-          <h2 className="text-base font-semibold text-white mb-1">Wallet Not Connected</h2>
-          <p className="text-gray-400 text-sm">Connect your wallet to view purchases</p>
+          <h2 className="text-base font-semibold text-white mb-1">Please Sign In</h2>
+          <p className="text-gray-400 text-sm">Sign in to view your purchases</p>
         </div>
       </div>
     );
@@ -171,7 +171,7 @@ function PurchaseCard({
                 </div>
                 <div>
                   <div className="text-gray-500 mb-0.5">Amount</div>
-                  <div className="text-[#0074e4] font-bold">{listing.price} USDC</div>
+                  <div className="text-[#0074e4] font-bold">${listing.price}</div>
                 </div>
                 <div>
                   <div className="text-gray-500 mb-0.5">App ID</div>
