@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { Package, CheckCircle, AlertCircle, Clock, Shield, History, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
+import { blockchain } from '../services/blockchain';
 import { TransactionHistory } from './TransactionHistory';
 import { Listing } from '../types';
 
@@ -102,7 +103,7 @@ export function SellerDashboard() {
 
     // Parse Steam App ID from raw ID or Steam store URL
     let steamAppId: number;
-    const urlMatch = newSteamAppId.match(/store\.steampowered\.com\/app\/(\d+)/);
+    const urlMatch = newSteamAppId.match(/(?:store\.steampowered|steamcommunity)\.com\/app\/(\d+)/);
     if (urlMatch) {
       steamAppId = parseInt(urlMatch[1]);
     } else {
@@ -121,6 +122,13 @@ export function SellerDashboard() {
 
     setIsCreating(true);
     try {
+      const nativeBalance = await blockchain.getNativeBalance(wallet.address);
+      if (nativeBalance === 0) {
+        toast.error('You need MON on the Monad network to pay for gas fees. Please fund your wallet before creating a listing.');
+        setIsCreating(false);
+        return;
+      }
+
       const result = await api.createListing(wallet.address, steamAppId, price);
       toast.success(`Listing created! ID: ${result.id}`);
       setShowCreateForm(false);

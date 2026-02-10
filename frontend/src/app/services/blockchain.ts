@@ -54,6 +54,12 @@ export class BlockchainService {
     return Number(formatUnits(balance, 6));
   }
 
+  async getNativeBalance(address: string): Promise<number> {
+    if (!this.provider) throw new Error('Not connected');
+    const balance = await this.provider.getBalance(address);
+    return Number(formatUnits(balance, 18));
+  }
+
   private async getReceiptDetails(receipt: TransactionReceipt): Promise<TransactionResult> {
     if (!this.provider) throw new Error('Not connected');
     const block = await this.provider.getBlock(receipt.blockNumber);

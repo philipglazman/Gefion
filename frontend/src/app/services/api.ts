@@ -124,6 +124,19 @@ const api = {
     return res.json();
   },
 
+  // Check if a Steam profile is public
+  async checkSteamProfileVisibility(username: string): Promise<{
+    public: boolean;
+    found: boolean;
+    steamId?: string;
+    personaName?: string;
+    message?: string;
+  }> {
+    const res = await fetch(`${config.apiUrl}/api/steam/profile/${encodeURIComponent(username)}/visibility`);
+    if (!res.ok) throw new Error('Failed to check Steam profile visibility');
+    return res.json();
+  },
+
   // Get multiple Steam game details
   async getSteamGames(appIds: number[]): Promise<Record<number, SteamGame>> {
     const res = await fetch(`${config.apiUrl}/api/steam/games`, {

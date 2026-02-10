@@ -1,5 +1,7 @@
 // Steam Store API service with caching
 
+import { config } from '../config/index.js';
+
 const gameCache = new Map();
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -54,6 +56,51 @@ export async function getGameDetails(appId) {
       appId
     };
   }
+}
+
+export async function checkProfileVisibility(vanityName) {
+  if (!config.steamApiKey) {
+    throw new Error('STEAM_API_KEY is not configured');
+  }
+
+  // Resolve vanity URL to Steam ID
+  const resolveRes = await fetch(
+    `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${config.steamApiKey}&vanityurl=${encodeURIComponent(vanityName)}`
+  );
+  if (!resolveRes.ok) {
+    throw new Error(`Steam API error: ${resolveRes.status}`);
+  }
+
+  const resolveData = await resolveRes.json();
+  if (resolveData.response.success !== 1) {
+    return { public: false, found: false, message: 'Steam user not found' };
+  }
+
+  const steamId = resolveData.response.steamid;
+
+  // Get player summary
+  const summaryRes = await fetch(
+    `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v0002/?key=${config.steamApiKey}&steamids=${steamId}`
+  );
+  if (!summaryRes.ok) {
+    throw new Error(`Steam API error: ${summaryRes.status}`);
+  }
+
+  const summaryData = await summaryRes.json();
+  const players = summaryData.response.players;
+  if (!players || players.length === 0) {
+    return { public: false, found: false, message: 'Steam user not found' };
+  }
+
+  const player = players[0];
+  const isPublic = player.communityvisibilitystate === 3;
+
+  return {
+    public: isPublic,
+    found: true,
+    steamId,
+    personaName: player.personaname,
+  };
 }
 
 export async function getMultipleGameDetails(appIds) {

@@ -54,5 +54,6 @@ export const config = {
   // Private key for backend wallet (verifier calls)
   // WARNING: Use environment variable in production, never commit real keys
   verifierPrivateKey: process.env.VERIFIER_PRIVATE_KEY || '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80',
+  steamApiKey: process.env.STEAM_API_KEY || '',
   contracts
 };
