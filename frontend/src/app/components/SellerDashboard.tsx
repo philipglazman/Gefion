@@ -28,6 +28,7 @@ export function SellerDashboard() {
   const [newSteamAppId, setNewSteamAppId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [offChainListings, setOffChainListings] = useState<OffChainListing[]>([]);
+  const [showPastTrades, setShowPastTrades] = useState(false);
 
   const fetchOffChainListings = async () => {
     if (!wallet.connected || !wallet.address) return;
@@ -179,6 +180,8 @@ export function SellerDashboard() {
   }
 
   const sellerTrades = myListings.selling;
+  const activeTrades = sellerTrades.filter(t => t.status === 'Pending' || t.status === 'Acknowledged');
+  const pastTrades = sellerTrades.filter(t => t.status === 'Completed' || t.status === 'Refunded' || t.status === 'Cancelled');
   const activeListings = offChainListings.filter(l => l.status === 'active');
 
   return (
@@ -295,131 +298,183 @@ export function SellerDashboard() {
           )}
         </div>
 
-        {/* Incoming Trades */}
-        <div>
+        {/* Active Trades */}
+        <div className="mb-8">
           <h2 className="text-sm font-semibold text-white mb-3">Incoming Trades</h2>
-          {sellerTrades.length === 0 ? (
+          {activeTrades.length === 0 ? (
             <div className="bg-[#1a1a1a] rounded border border-white/5 p-8 text-center">
               <Package className="w-10 h-10 text-gray-600 mx-auto mb-2" />
-              <h3 className="text-xs font-medium text-white mb-1">No incoming trades</h3>
+              <h3 className="text-xs font-medium text-white mb-1">No active trades</h3>
               <p className="text-gray-500 text-[10px]">Trades from buyers appear here</p>
             </div>
           ) : (
             <div className="space-y-3">
-              {sellerTrades.map((trade) => (
-                <div key={trade.id} className="bg-[#1a1a1a] rounded border border-white/5 overflow-hidden">
-                  <div className="flex">
-                    {trade.image && (
-                      <div className="w-32 flex-shrink-0">
-                        <img src={trade.image} alt={trade.title} className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                    <div className="flex-1 p-4">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-2">
-                            <h3 className="text-sm font-semibold text-white truncate">
-                              {trade.title || `Game #${trade.steamAppId}`}
-                            </h3>
-                            <StatusBadge status={trade.status} />
-                          </div>
-                          <div className="grid grid-cols-4 gap-3 text-xs">
-                            <div>
-                              <div className="text-gray-500 mb-0.5">Price</div>
-                              <div className="text-[#0074e4] font-bold">${trade.price}</div>
-                            </div>
-                            <div>
-                              <div className="text-gray-500 mb-0.5">App ID</div>
-                              <div className="text-white">{trade.steamAppId}</div>
-                            </div>
-                            {trade.buyer && (
-                              <>
-                                <div>
-                                  <div className="text-gray-500 mb-0.5">Buyer</div>
-                                  <div className="text-white font-mono text-[10px]">
-                                    {trade.buyer.slice(0, 6)}...{trade.buyer.slice(-4)}
-                                  </div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-500 mb-0.5">Steam User</div>
-                                  <div className="text-white truncate">{trade.buyerSteamUsername}</div>
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                        <div className="ml-4 flex flex-col gap-1.5">
-                          <button
-                            onClick={() => setSelectedTrade(trade)}
-                            className="px-2.5 py-1 border border-white/10 text-gray-400 rounded hover:bg-white/5 hover:text-white transition-all text-xs flex items-center gap-1"
-                          >
-                            <History className="w-3 h-3" />
-                            History
-                          </button>
-                          {trade.status === 'Pending' && (
-                            <>
-                              <button
-                                onClick={() => handleAcknowledge(trade.id)}
-                                className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all text-xs"
-                              >
-                                Acknowledge
-                              </button>
-                              <button
-                                onClick={() => handleCancelTrade(trade.id)}
-                                className="px-2.5 py-1 bg-[#ff4444] text-white rounded hover:bg-[#cc3333] transition-all text-xs"
-                              >
-                                Cancel
-                              </button>
-                            </>
-                          )}
-                          {trade.status === 'Acknowledged' && (
-                            <>
-                              <button
-                                onClick={() => handleProveOwnership(trade.id)}
-                                disabled={provingId === trade.id}
-                                className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all disabled:opacity-50 text-xs flex items-center gap-1"
-                              >
-                                <Shield className="w-3 h-3" />
-                                {provingId === trade.id ? 'Proving...' : 'Verify'}
-                              </button>
-                              <button
-                                onClick={() => handleClaimFunds(trade.id)}
-                                className="px-2.5 py-1 bg-[#00d26a] text-white rounded hover:bg-[#00b85c] transition-all text-xs"
-                              >
-                                Claim
-                              </button>
-                              <p className="flex items-center gap-1 text-[10px] text-gray-500">
-                                <Clock className="w-2.5 h-2.5" />
-                                After window or verify
-                              </p>
-                            </>
-                          )}
-                          {trade.status === 'Completed' && (
-                            <div className="flex items-center gap-1 text-[#00d26a] px-2.5 py-1 bg-[#00d26a]/10 rounded text-xs">
-                              <CheckCircle className="w-3 h-3" />
-                              Completed
-                            </div>
-                          )}
-                          {trade.status === 'Refunded' && (
-                            <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
-                              <CheckCircle className="w-3 h-3" />
-                              Refunded
-                            </div>
-                          )}
-                          {trade.status === 'Cancelled' && (
-                            <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
-                              <CheckCircle className="w-3 h-3" />
-                              Cancelled
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+              {activeTrades.map((trade) => (
+                <TradeCard
+                  key={trade.id}
+                  trade={trade}
+                  provingId={provingId}
+                  onHistory={() => setSelectedTrade(trade)}
+                  onAcknowledge={() => handleAcknowledge(trade.id)}
+                  onCancel={() => handleCancelTrade(trade.id)}
+                  onVerify={() => handleProveOwnership(trade.id)}
+                  onClaim={() => handleClaimFunds(trade.id)}
+                />
               ))}
             </div>
           )}
+        </div>
+
+        {/* Past Trades */}
+        {pastTrades.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowPastTrades(!showPastTrades)}
+              className="flex items-center gap-2 text-sm font-semibold text-white mb-3 hover:text-gray-300 transition-colors"
+            >
+              <span>Past Trades ({pastTrades.length})</span>
+              <span className="text-gray-500 text-xs">{showPastTrades ? '▲' : '▼'}</span>
+            </button>
+            {showPastTrades && (
+              <div className="space-y-3">
+                {pastTrades.map((trade) => (
+                  <TradeCard
+                    key={trade.id}
+                    trade={trade}
+                    provingId={provingId}
+                    onHistory={() => setSelectedTrade(trade)}
+                    onAcknowledge={() => handleAcknowledge(trade.id)}
+                    onCancel={() => handleCancelTrade(trade.id)}
+                    onVerify={() => handleProveOwnership(trade.id)}
+                    onClaim={() => handleClaimFunds(trade.id)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TradeCard({ trade, provingId, onHistory, onAcknowledge, onCancel, onVerify, onClaim }: {
+  trade: Listing;
+  provingId: number | null;
+  onHistory: () => void;
+  onAcknowledge: () => void;
+  onCancel: () => void;
+  onVerify: () => void;
+  onClaim: () => void;
+}) {
+  return (
+    <div className="bg-[#1a1a1a] rounded border border-white/5 overflow-hidden">
+      <div className="flex">
+        {trade.image && (
+          <div className="w-32 flex-shrink-0">
+            <img src={trade.image} alt={trade.title} className="w-full h-full object-cover" />
+          </div>
+        )}
+        <div className="flex-1 p-4">
+          <div className="flex items-start justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-white truncate">
+                  {trade.title || `Game #${trade.steamAppId}`}
+                </h3>
+                <StatusBadge status={trade.status} />
+              </div>
+              <div className="grid grid-cols-4 gap-3 text-xs">
+                <div>
+                  <div className="text-gray-500 mb-0.5">Price</div>
+                  <div className="text-[#0074e4] font-bold">${trade.price}</div>
+                </div>
+                <div>
+                  <div className="text-gray-500 mb-0.5">App ID</div>
+                  <div className="text-white">{trade.steamAppId}</div>
+                </div>
+                {trade.buyer && (
+                  <>
+                    <div>
+                      <div className="text-gray-500 mb-0.5">Buyer</div>
+                      <div className="text-white font-mono text-[10px]">
+                        {trade.buyer.slice(0, 6)}...{trade.buyer.slice(-4)}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-gray-500 mb-0.5">Steam User</div>
+                      <div className="text-white truncate">{trade.buyerSteamUsername}</div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="ml-4 flex flex-col gap-1.5">
+              <button
+                onClick={onHistory}
+                className="px-2.5 py-1 border border-white/10 text-gray-400 rounded hover:bg-white/5 hover:text-white transition-all text-xs flex items-center gap-1"
+              >
+                <History className="w-3 h-3" />
+                History
+              </button>
+              {trade.status === 'Pending' && (
+                <>
+                  <button
+                    onClick={onAcknowledge}
+                    className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all text-xs"
+                  >
+                    Acknowledge
+                  </button>
+                  <button
+                    onClick={onCancel}
+                    className="px-2.5 py-1 bg-[#ff4444] text-white rounded hover:bg-[#cc3333] transition-all text-xs"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+              {trade.status === 'Acknowledged' && (
+                <>
+                  <button
+                    onClick={onVerify}
+                    disabled={provingId === trade.id}
+                    className="px-2.5 py-1 bg-[#0074e4] text-white rounded hover:bg-[#0066cc] transition-all disabled:opacity-50 text-xs flex items-center gap-1"
+                  >
+                    <Shield className="w-3 h-3" />
+                    {provingId === trade.id ? 'Proving...' : 'Verify'}
+                  </button>
+                  <button
+                    onClick={onClaim}
+                    className="px-2.5 py-1 bg-[#00d26a] text-white rounded hover:bg-[#00b85c] transition-all text-xs"
+                  >
+                    Claim
+                  </button>
+                  <p className="flex items-center gap-1 text-[10px] text-gray-500">
+                    <Clock className="w-2.5 h-2.5" />
+                    After window or verify
+                  </p>
+                </>
+              )}
+              {trade.status === 'Completed' && (
+                <div className="flex items-center gap-1 text-[#00d26a] px-2.5 py-1 bg-[#00d26a]/10 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Completed
+                </div>
+              )}
+              {trade.status === 'Refunded' && (
+                <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Refunded
+                </div>
+              )}
+              {trade.status === 'Cancelled' && (
+                <div className="flex items-center gap-1 text-gray-400 px-2.5 py-1 bg-white/5 rounded text-xs">
+                  <CheckCircle className="w-3 h-3" />
+                  Cancelled
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
