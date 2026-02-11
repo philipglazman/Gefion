@@ -19,6 +19,7 @@ export const config = {
   chainId: Number(import.meta.env.VITE_CHAIN_ID) || 31337,
   rpcUrl: import.meta.env.VITE_RPC_URL || 'http://localhost:8545',
   explorerUrl: import.meta.env.VITE_EXPLORER_URL || '',
+  sellerStakePercent: 10,
 };
 
 // Get explorer URL for a transaction
@@ -55,6 +56,10 @@ export async function fetchConfig(): Promise<typeof config> {
       if (chainConfig) {
         config.explorerUrl = chainConfig.explorerUrl;
       }
+    }
+
+    if (data.sellerStakePercent != null) {
+      config.sellerStakePercent = data.sellerStakePercent;
     }
 
     // Set RPC URL from chain config

@@ -11,7 +11,8 @@ router.get('/', async (req, res) => {
       contracts: blockchain.getContractAddresses(),
       chainId: config.chainId,
       rpcUrl: config.rpcUrl,
-      explorerUrl: config.explorerUrl
+      explorerUrl: config.explorerUrl,
+      sellerStakePercent: config.sellerStakePercent
     });
   } catch (error) {
     res.status(500).json({ error: error.message });

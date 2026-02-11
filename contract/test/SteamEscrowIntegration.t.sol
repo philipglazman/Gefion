@@ -42,8 +42,12 @@ contract SteamEscrowIntegrationTest is Test {
         // Transfer verifier role to game verifier
         escrow.setVerifier(address(gameVerifier));
 
-        // Fund buyer with USDC
+        // Fund buyer and seller with USDC
         usdc.mint(buyer, 10_000 * 1e6);
+        usdc.mint(seller, 10_000 * 1e6);
+
+        // Set seller stake to 10%
+        escrow.setSellerStakeBps(1000);
     }
 
     // ==================== HELPERS ====================
@@ -56,10 +60,15 @@ contract SteamEscrowIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev Seller acknowledges a trade
+    /// @dev Seller acknowledges a trade (approves stake amount first)
     function _acknowledge(uint256 tradeId) internal {
-        vm.prank(seller);
+        vm.startPrank(seller);
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
+        if (stakeAmount > 0) {
+            usdc.approve(address(escrow), stakeAmount);
+        }
         escrow.acknowledge(tradeId);
+        vm.stopPrank();
     }
 
     /// @dev Create a mock notary-signed proof for a given timestamp and ownership
@@ -113,6 +122,7 @@ contract SteamEscrowIntegrationTest is Test {
         uint256 tradeId = _createTrade();
         _acknowledge(tradeId);
 
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
         uint256 sellerBefore = usdc.balanceOf(seller);
         uint64 proofTs = uint64(block.timestamp + 30 minutes);
         vm.warp(block.timestamp + 30 minutes);
@@ -120,7 +130,7 @@ contract SteamEscrowIntegrationTest is Test {
         vm.prank(anyone);
         _submitProof(tradeId, proofTs, true);
 
-        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE);
+        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE + stakeAmount);
         SteamGameEscrow.Trade memory trade = escrow.getTrade(tradeId);
         assertEq(uint8(trade.status), uint8(SteamGameEscrow.TradeStatus.Completed));
     }
@@ -131,7 +141,9 @@ contract SteamEscrowIntegrationTest is Test {
         uint256 tradeId = _createTrade();
         _acknowledge(tradeId);
 
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
         uint256 buyerBefore = usdc.balanceOf(buyer);
+        uint256 sellerBefore = usdc.balanceOf(seller);
         uint64 proofTs = uint64(block.timestamp + 10 minutes);
         vm.warp(block.timestamp + 10 minutes);
 
@@ -139,6 +151,7 @@ contract SteamEscrowIntegrationTest is Test {
         _submitProof(tradeId, proofTs, false);
 
         assertEq(usdc.balanceOf(buyer), buyerBefore + GAME_PRICE);
+        assertEq(usdc.balanceOf(seller), sellerBefore + stakeAmount);
         SteamGameEscrow.Trade memory trade = escrow.getTrade(tradeId);
         assertEq(uint8(trade.status), uint8(SteamGameEscrow.TradeStatus.Refunded));
     }
@@ -149,13 +162,14 @@ contract SteamEscrowIntegrationTest is Test {
         uint256 tradeId = _createTrade();
         _acknowledge(tradeId);
 
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
         uint256 sellerBefore = usdc.balanceOf(seller);
         vm.warp(block.timestamp + 1 hours + 1);
 
         vm.prank(seller);
         escrow.claimAfterWindow(tradeId);
 
-        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE);
+        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE + stakeAmount);
         SteamGameEscrow.Trade memory trade = escrow.getTrade(tradeId);
         assertEq(uint8(trade.status), uint8(SteamGameEscrow.TradeStatus.Completed));
     }
@@ -231,11 +245,11 @@ contract SteamEscrowIntegrationTest is Test {
         escrow.cancelTrade(tradeId);
     }
 
-    function test_BuyerCancel_OnlyBuyer() public {
+    function test_BuyerCancel_OnlyBuyerOrSeller() public {
         uint256 tradeId = _createTrade();
 
-        vm.prank(seller);
-        vm.expectRevert("Not buyer");
+        vm.prank(anyone);
+        vm.expectRevert("Not buyer or seller");
         escrow.cancelTrade(tradeId);
     }
 
@@ -474,6 +488,79 @@ contract SteamEscrowIntegrationTest is Test {
         assertEq(uint8(trade.status), uint8(SteamGameEscrow.TradeStatus.Completed));
     }
 
+    // ==================== SELLER STAKE TESTS ====================
+
+    function test_StakeCollectedOnAcknowledge() public {
+        uint256 tradeId = _createTrade();
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
+        uint256 sellerBefore = usdc.balanceOf(seller);
+
+        _acknowledge(tradeId);
+
+        assertEq(usdc.balanceOf(seller), sellerBefore - stakeAmount);
+        SteamGameEscrow.Trade memory trade = escrow.getTrade(tradeId);
+        assertEq(trade.sellerStake, stakeAmount);
+    }
+
+    function test_StakeReturnedOnCompletion() public {
+        uint256 tradeId = _createTrade();
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
+        _acknowledge(tradeId);
+
+        uint256 sellerBefore = usdc.balanceOf(seller);
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.prank(seller);
+        escrow.claimAfterWindow(tradeId);
+
+        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE + stakeAmount);
+    }
+
+    function test_StakeReturnedOnRefund() public {
+        uint256 tradeId = _createTrade();
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
+        _acknowledge(tradeId);
+
+        uint256 sellerBefore = usdc.balanceOf(seller);
+        uint64 proofTs = uint64(block.timestamp + 10 minutes);
+        vm.warp(block.timestamp + 10 minutes);
+        vm.prank(anyone);
+        _submitProof(tradeId, proofTs, false);
+
+        assertEq(usdc.balanceOf(seller), sellerBefore + stakeAmount);
+    }
+
+    function test_OnlyOwnerCanSetStakeBps() public {
+        vm.prank(anyone);
+        vm.expectRevert();
+        escrow.setSellerStakeBps(500);
+    }
+
+    function test_StakeBpsCappedAt10000() public {
+        vm.expectRevert("Exceeds 100%");
+        escrow.setSellerStakeBps(10001);
+    }
+
+    function test_ZeroBpsNoStake() public {
+        escrow.setSellerStakeBps(0);
+        uint256 tradeId = _createTrade();
+        uint256 sellerBefore = usdc.balanceOf(seller);
+
+        vm.prank(seller);
+        escrow.acknowledge(tradeId);
+
+        assertEq(usdc.balanceOf(seller), sellerBefore);
+        SteamGameEscrow.Trade memory trade = escrow.getTrade(tradeId);
+        assertEq(trade.sellerStake, 0);
+    }
+
+    function test_SellerNoApprovalReverts() public {
+        uint256 tradeId = _createTrade();
+        // Seller does not approve USDC — should revert on transferFrom
+        vm.prank(seller);
+        vm.expectRevert();
+        escrow.acknowledge(tradeId);
+    }
+
     function test_PackedProof_HappyPath() public {
         uint256 tradeId = _createTrade();
         _acknowledge(tradeId);
@@ -493,10 +580,11 @@ contract SteamEscrowIntegrationTest is Test {
             messageHash, v, r, s, SERVER_NAME, proofTs, true, transcriptHash
         );
 
+        uint256 stakeAmount = GAME_PRICE * escrow.sellerStakeBps() / 10000;
         uint256 sellerBefore = usdc.balanceOf(seller);
         vm.prank(anyone);
         gameVerifier.verifyAndResolvePacked(tradeId, proof);
 
-        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE);
+        assertEq(usdc.balanceOf(seller), sellerBefore + GAME_PRICE + stakeAmount);
     }
 }

@@ -8,6 +8,7 @@ export interface Listing {
   buyerSteamUsername: string | null;
   acknowledgedAt: number | null;
   disputeDeadline: number | null;
+  sellerStake?: string;
   // UI-only fields (not from contract)
   title?: string;
   image?: string;

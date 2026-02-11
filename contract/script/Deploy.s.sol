@@ -36,6 +36,10 @@ contract DeployScript is Script {
         escrow.setVerifier(address(gameVerifier));
         console.log("Escrow verifier set to SteamGameVerifier");
 
+        // Set seller stake to 10% (1000 basis points)
+        escrow.setSellerStakeBps(1000);
+        console.log("Seller stake set to 10%");
+
         // Mint some USDC to test accounts
         // Anvil accounts 1-4 get 10,000 USDC each
         address[4] memory testAccounts = [

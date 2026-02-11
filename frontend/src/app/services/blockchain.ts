@@ -14,8 +14,9 @@ const ESCROW_ABI = [
   'function cancelTrade(uint256 tradeId) external',
   'function acknowledge(uint256 tradeId) external',
   'function claimAfterWindow(uint256 tradeId) external',
-  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt))',
+  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt, uint256 sellerStake))',
   'function nextTradeId() external view returns (uint256)',
+  'function sellerStakeBps() external view returns (uint256)',
   'event TradeCreated(uint256 indexed tradeId, address indexed buyer, address indexed seller, uint256 price, uint256 steamAppId, string steamUsername)',
 ];
 
@@ -125,7 +126,23 @@ export class BlockchainService {
   }
 
   async acknowledge(tradeId: number): Promise<string> {
-    if (!this.escrow || !this.provider) throw new Error('Not connected');
+    if (!this.escrow || !this.usdc || !this.provider) throw new Error('Not connected');
+
+    // Read trade price and stake bps to compute required approval
+    const trade = await this.escrow.getTrade(tradeId);
+    const stakeBps = await this.escrow.sellerStakeBps();
+    const stakeAmount = (trade.price * stakeBps) / 10000n;
+
+    if (stakeAmount > 0n) {
+      const signer = await this.provider.getSigner();
+      const address = await signer.getAddress();
+      const allowance = await this.usdc.allowance(address, config.escrowAddress);
+      if (allowance < stakeAmount) {
+        const approveTx = await this.usdc.approve(config.escrowAddress, stakeAmount);
+        await approveTx.wait();
+      }
+    }
+
     const tx = await this.escrow.acknowledge(tradeId);
     const receipt = await tx.wait();
     const details = await this.getReceiptDetails(receipt);

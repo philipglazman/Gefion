@@ -10,7 +10,7 @@ const ESCROW_ABI = [
   'function acknowledge(uint256 tradeId) external',
   'function claimAfterWindow(uint256 tradeId) external',
   'function submitProofResult(uint256 tradeId, bool buyerOwnsGame) external',
-  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt))',
+  'function getTrade(uint256 tradeId) external view returns (tuple(address buyer, address seller, uint256 steamAppId, uint256 price, string buyerSteamUsername, uint8 status, uint256 createdAt, uint256 acknowledgedAt, uint256 sellerStake))',
   'function nextTradeId() external view returns (uint256)',
   'function getAcknowledgedAt(uint256 tradeId) external view returns (uint256)',
   'event TradeCreated(uint256 indexed tradeId, address indexed buyer, address indexed seller, uint256 price, uint256 steamAppId, string steamUsername)',
@@ -137,7 +137,8 @@ class BlockchainService {
       status: statusMap[trade.status],
       createdAt: trade.createdAt > 0 ? Number(trade.createdAt) : null,
       acknowledgedAt: trade.acknowledgedAt > 0 ? Number(trade.acknowledgedAt) : null,
-      disputeDeadline: trade.acknowledgedAt > 0 ? Number(trade.acknowledgedAt) + 3600 : null
+      disputeDeadline: trade.acknowledgedAt > 0 ? Number(trade.acknowledgedAt) + 3600 : null,
+      sellerStake: trade.sellerStake > 0 ? ethers.formatUnits(trade.sellerStake, 6) : null
     };
   }
 

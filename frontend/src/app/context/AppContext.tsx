@@ -212,6 +212,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const acknowledge = async (tradeId: number) => {
     const txHash = await blockchain.acknowledge(tradeId);
+    await refreshBalance();
     await refreshMyListings();
     return txHash;
   };

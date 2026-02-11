@@ -4,6 +4,7 @@ import { Package, CheckCircle, AlertCircle, Clock, Shield, History, Plus, X } fr
 import { toast } from 'sonner';
 import api from '../services/api';
 import { blockchain } from '../services/blockchain';
+import { config } from '../config';
 import { TransactionHistory } from './TransactionHistory';
 import { Listing } from '../types';
 
@@ -389,6 +390,12 @@ function TradeCard({ trade, provingId, onHistory, onAcknowledge, onCancel, onVer
                   <div className="text-gray-500 mb-0.5">Price</div>
                   <div className="text-[#0074e4] font-bold">${trade.price}</div>
                 </div>
+                {trade.sellerStake && (
+                  <div>
+                    <div className="text-gray-500 mb-0.5">Stake</div>
+                    <div className="text-[#ffaa00] font-bold">${trade.sellerStake}</div>
+                  </div>
+                )}
                 <div>
                   <div className="text-gray-500 mb-0.5">App ID</div>
                   <div className="text-white">{trade.steamAppId}</div>
@@ -425,6 +432,11 @@ function TradeCard({ trade, provingId, onHistory, onAcknowledge, onCancel, onVer
                   >
                     Acknowledge
                   </button>
+                  {config.sellerStakePercent > 0 && (
+                    <p className="text-[10px] text-[#ffaa00]">
+                      Stake: ${(Number(trade.price) * config.sellerStakePercent / 100).toFixed(2)} ({config.sellerStakePercent}%)
+                    </p>
+                  )}
                   <button
                     onClick={onCancel}
                     className="px-2.5 py-1 bg-[#ff4444] text-white rounded hover:bg-[#cc3333] transition-all text-xs"

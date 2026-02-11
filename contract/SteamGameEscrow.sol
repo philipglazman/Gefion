@@ -2,11 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title SteamGameEscrow
 /// @notice Buyer-initiated escrow for trustless Steam game exchanges using USDC
 /// @dev Integrates with off-chain zkTLS verifier for game ownership proofs
-contract SteamGameEscrow {
+contract SteamGameEscrow is Ownable {
     // =============================================================
     //                           STORAGE
     // =============================================================
@@ -18,6 +19,7 @@ contract SteamGameEscrow {
     uint256 public constant ACKNOWLEDGE_DEADLINE = 24 hours;
 
     uint256 public nextTradeId;
+    uint256 public sellerStakeBps;
 
     enum TradeStatus {
         Pending,
@@ -36,6 +38,7 @@ contract SteamGameEscrow {
         TradeStatus status;
         uint256 createdAt;
         uint256 acknowledgedAt;
+        uint256 sellerStake;
     }
 
     mapping(uint256 => Trade) public trades;
@@ -57,12 +60,13 @@ contract SteamGameEscrow {
     event FundsReleased(uint256 indexed tradeId, address indexed recipient);
     event FundsRefunded(uint256 indexed tradeId, address indexed recipient);
     event VerifierUpdated(address indexed oldVerifier, address indexed newVerifier);
+    event SellerStakeBpsUpdated(uint256 newBps);
 
     // =============================================================
     //                         CONSTRUCTOR
     // =============================================================
 
-    constructor(address _usdc, address _verifier) {
+    constructor(address _usdc, address _verifier) Ownable(msg.sender) {
         require(_usdc != address(0), "Invalid USDC");
         require(_verifier != address(0), "Invalid verifier");
         usdc = IERC20(_usdc);
@@ -96,7 +100,8 @@ contract SteamGameEscrow {
             status: TradeStatus.Pending,
             buyerSteamUsername: steamUsername,
             createdAt: block.timestamp,
-            acknowledgedAt: 0
+            acknowledgedAt: 0,
+            sellerStake: 0
         });
 
         // Price is determined by allowance — transfer whatever buyer approved
@@ -155,6 +160,13 @@ contract SteamGameEscrow {
         trade.status = TradeStatus.Acknowledged;
         trade.acknowledgedAt = block.timestamp;
 
+        // Collect seller stake if configured
+        uint256 stakeAmount = trade.price * sellerStakeBps / 10000;
+        if (stakeAmount > 0) {
+            trade.sellerStake = stakeAmount;
+            usdc.transferFrom(msg.sender, address(this), stakeAmount);
+        }
+
         emit TradeAcknowledged(tradeId);
     }
 
@@ -170,7 +182,7 @@ contract SteamGameEscrow {
         );
 
         trade.status = TradeStatus.Completed;
-        usdc.transfer(trade.seller, trade.price);
+        usdc.transfer(trade.seller, trade.price + trade.sellerStake);
 
         emit FundsReleased(tradeId, trade.seller);
     }
@@ -189,14 +201,17 @@ contract SteamGameEscrow {
         require(trade.status == TradeStatus.Acknowledged, "Not acknowledged");
 
         if (buyerOwnsGame) {
-            // Buyer received the game — release funds to seller
+            // Buyer received the game — release funds + stake to seller
             trade.status = TradeStatus.Completed;
-            usdc.transfer(trade.seller, trade.price);
+            usdc.transfer(trade.seller, trade.price + trade.sellerStake);
             emit FundsReleased(tradeId, trade.seller);
         } else {
-            // Buyer doesn't have game — refund buyer
+            // Buyer doesn't have game — refund buyer, return stake to seller
             trade.status = TradeStatus.Refunded;
             usdc.transfer(trade.buyer, trade.price);
+            if (trade.sellerStake > 0) {
+                usdc.transfer(trade.seller, trade.sellerStake);
+            }
             emit FundsRefunded(tradeId, trade.buyer);
         }
     }
@@ -209,6 +224,18 @@ contract SteamGameEscrow {
 
         emit VerifierUpdated(verifier, newVerifier);
         verifier = newVerifier;
+    }
+
+    // =============================================================
+    //                      OWNER FUNCTIONS
+    // =============================================================
+
+    /// @notice Set the seller stake in basis points (e.g. 1000 = 10%)
+    /// @param _bps Basis points for seller stake, capped at 10000
+    function setSellerStakeBps(uint256 _bps) external onlyOwner {
+        require(_bps <= 10000, "Exceeds 100%");
+        sellerStakeBps = _bps;
+        emit SellerStakeBpsUpdated(_bps);
     }
 
     // =============================================================
